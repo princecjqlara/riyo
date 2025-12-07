@@ -91,10 +91,10 @@ export async function POST(request: NextRequest) {
                 } else {
                     // Return analysis only
                     results.push({
+                        ...analysis as unknown as BulkResult,
                         index: i,
                         success: true,
                         name: analysis.name,
-                        ...analysis as unknown as BulkResult
                     });
                 }
 
