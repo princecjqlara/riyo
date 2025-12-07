@@ -122,3 +122,4 @@ export function findBestMatch(
 export function calculateSimilarity(embedding1: number[], embedding2: number[]): number {
   return cosineSimilarity(embedding1, embedding2);
 }
+

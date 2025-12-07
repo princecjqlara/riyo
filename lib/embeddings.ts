@@ -145,3 +145,4 @@ export async function generateEmbeddingFromBase64(base64: string): Promise<numbe
 
   return generateEmbeddingFromFile(file);
 }
+

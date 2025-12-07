@@ -2,6 +2,9 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navbar from '@/components/shared/Navbar';
 import SearchCorrectionsQueue from '@/components/admin/SearchCorrectionsQueue';
 
+// Force dynamic rendering to prevent build-time errors with Supabase
+export const dynamic = 'force-dynamic';
+
 export default function CorrectionsPage() {
   return (
     <ProtectedRoute requiredRole="admin">
