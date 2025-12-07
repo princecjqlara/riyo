@@ -30,12 +30,23 @@ interface Product {
   wholesale_tiers: { min_qty: number; price: number; label: string }[] | null;
 }
 
-type TabType = 'products' | 'categories' | 'search' | 'analytics' | 'bulk';
+interface StoreRow {
+  id: string;
+  name: string;
+  organizer_id?: string;
+  created_at?: string;
+}
+
+type TabType = 'products' | 'categories' | 'search' | 'analytics' | 'bulk' | 'stores';
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<{ email: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentStoreId, setCurrentStoreId] = useState<string>('');
+  const [stores, setStores] = useState<StoreRow[]>([]);
+  const [storeEditId, setStoreEditId] = useState<string>('');
+  const [storeEditName, setStoreEditName] = useState<string>('');
+  const [storeSaving, setStoreSaving] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryTree, setCategoryTree] = useState<Category[]>([]);
@@ -99,6 +110,23 @@ export default function AdminDashboard() {
   };
 
   const fetchData = async () => {
+    try {
+      const res = await fetch('/api/stores');
+      if (res.ok) {
+        const body = await res.json();
+        const storeList: StoreRow[] = body.stores || [];
+        setStores(storeList);
+        if (!currentStoreId && storeList.length) {
+          setCurrentStoreId(storeList[0].id);
+          setStoreEditId(storeList[0].id);
+          setStoreEditName(storeList[0].name);
+        }
+      }
+    } catch (err) {
+      console.error('Store fetch failed', err);
+      setMessage('Could not load stores.');
+    }
+
     // Fetch products
     const { data: prods } = await supabase.from('items').select('*').order('created_at', { ascending: false });
     if (prods) setProducts(prods);
@@ -108,6 +136,33 @@ export default function AdminDashboard() {
     const data = await res.json();
     if (data.categories) setCategories(data.categories);
     if (data.tree) setCategoryTree(data.tree);
+  };
+
+  const saveStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!storeEditId || !storeEditName.trim()) {
+      setMessage('Select a store and enter a name.');
+      return;
+    }
+    setStoreSaving(true);
+    setMessage('');
+    try {
+      const res = await fetch('/api/stores', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: storeEditId, name: storeEditName.trim() }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to rename store');
+      const { store } = body;
+      setStores(stores.map((s) => (s.id === store.id ? store : s)));
+      setStoreEditName(store.name);
+      setMessage('Store updated.');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to update store');
+    } finally {
+      setStoreSaving(false);
+    }
   };
 
   // Image resize
@@ -418,10 +473,20 @@ export default function AdminDashboard() {
         <main className="max-w-7xl mx-auto p-6 animate-fade-in-up">
           {/* Tabs */}
           <div className="flex gap-2 mb-8 overflow-x-auto pb-2 no-scrollbar">
-            {(['products', 'categories', 'bulk', 'search', 'analytics'] as TabType[]).map(tab => (
+            {(['products', 'categories', 'bulk', 'search', 'analytics', 'stores'] as TabType[]).map(tab => (
               <button key={tab} onClick={() => { setActiveTab(tab); setSearchResults([]); }}
                 className={`px-6 py-3 rounded-full font-bold text-sm whitespace-nowrap transition-all duration-300 shadow-sm hover:shadow-md active:scale-95 ${activeTab === tab ? 'bg-gray-900 text-white shadow-gray-900/20 scale-105' : 'bg-white text-gray-500 border border-gray-100 hover:bg-gray-50 hover:text-gray-900'}`}>
-                {tab === 'products' ? '📦 Products' : tab === 'categories' ? '📁 Categories' : tab === 'bulk' ? '🚀 Bulk Upload' : tab === 'search' ? '🔍 Search' : '📊 Analytics'}
+                {tab === 'products'
+                  ? '📦 Products'
+                  : tab === 'categories'
+                    ? '📁 Categories'
+                    : tab === 'bulk'
+                      ? '🚀 Bulk Upload'
+                      : tab === 'search'
+                        ? '🔍 Search'
+                        : tab === 'analytics'
+                          ? '📊 Analytics'
+                          : '🏪 Stores'}
               </button>
             ))}
           </div>
@@ -747,6 +812,97 @@ export default function AdminDashboard() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* STORES TAB */}
+          {activeTab === 'stores' && (
+            <div className="max-w-4xl mx-auto animate-fade-in">
+              <div className="bg-white rounded-3xl p-8 shadow-xl shadow-gray-100/50 border border-gray-100 mb-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-2xl font-black text-gray-900">Manage Stores</h3>
+                    <p className="text-gray-500 text-sm">Rename a store and copy its ID.</p>
+                  </div>
+                  <span className="text-sm text-gray-500">{stores.length} total</span>
+                </div>
+                <form onSubmit={saveStore} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div className="md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Store</label>
+                    <select
+                      value={storeEditId}
+                      onChange={(e) => {
+                        setStoreEditId(e.target.value);
+                        const match = stores.find((s) => s.id === e.target.value);
+                        if (match) setStoreEditName(match.name);
+                      }}
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-3 shadow-sm focus:border-gray-900 focus:ring-gray-900/10"
+                    >
+                      <option value="">Select a store</option>
+                      {stores.map((store) => (
+                        <option key={store.id} value={store.id}>{store.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">New name</label>
+                    <input
+                      type="text"
+                      value={storeEditName}
+                      onChange={(e) => setStoreEditName(e.target.value)}
+                      className="w-full rounded-2xl border border-gray-200 px-4 py-3 shadow-sm focus:border-gray-900 focus:ring-gray-900/10"
+                      placeholder="Enter new store name"
+                    />
+                  </div>
+                  <div className="md:col-span-1 flex gap-3">
+                    <button
+                      type="submit"
+                      disabled={storeSaving}
+                      className="inline-flex items-center justify-center rounded-2xl bg-gray-900 px-5 py-3 text-white font-bold shadow-lg shadow-gray-900/15 hover:scale-105 active:scale-95 transition-all disabled:opacity-60"
+                    >
+                      {storeSaving ? 'Saving...' : 'Rename Store'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => storeEditId && navigator.clipboard?.writeText(storeEditId)}
+                      disabled={!storeEditId}
+                      className="inline-flex items-center justify-center rounded-2xl bg-gray-100 px-4 py-3 text-gray-800 font-semibold border border-gray-200 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      Copy ID
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {stores.map((store) => (
+                  <div key={store.id} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-bold text-gray-900">{store.name}</h4>
+                        <p className="text-xs text-gray-500 break-all mt-1">{store.id}</p>
+                      </div>
+                      <button
+                        className="text-sm text-gray-600 underline"
+                        onClick={() => {
+                          setStoreEditId(store.id);
+                          setStoreEditName(store.name);
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                    {store.created_at && (
+                      <p className="text-xs text-gray-400 mt-2">Created {new Date(store.created_at).toLocaleDateString()}</p>
+                    )}
+                  </div>
+                ))}
+                {stores.length === 0 && (
+                  <div className="bg-white rounded-2xl p-6 text-center border border-dashed border-gray-200 text-gray-500">
+                    No stores found. Create one from the organizer console.
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
