@@ -3,9 +3,10 @@ import { createClient } from '@/lib/supabase/server';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -32,7 +33,7 @@ export async function POST(
       .update({
         embedding: embeddingVector as any, // Supabase will handle vector conversion
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
