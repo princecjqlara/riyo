@@ -12,6 +12,30 @@ interface WholesaleTier {
     label: string;
 }
 
+type ProductSize = { size: string; price: number };
+type ProductRow = {
+    id: string;
+    store_id?: string | null;
+    name: string;
+    price: number;
+    brand?: string | null;
+    image_url?: string | null;
+    additional_images?: string[] | null;
+    wholesale_tiers?: WholesaleTier[] | null;
+    quantity?: number | null;
+    sizes?: ProductSize[] | null;
+};
+
+type CartItemRow = {
+    id: string;
+    quantity: number;
+    unit_price: number;
+    is_wholesale: boolean;
+    tier_label: string | null;
+    size: string | null;
+    product: ProductRow | null;
+};
+
 // Get or create cart
 async function getOrCreateCart(
     supabase: ReturnType<typeof getSupabase>,
@@ -131,18 +155,19 @@ export async function GET(request: NextRequest) {
         let totalDiscount = 0;
 
         const enrichedItems = (items || [])
-            .filter((item: any) => {
-                if (!cart.store_id || !item.product) return true;
+            .filter((item: CartItemRow) => {
+                if (!item.product) return false;
+                if (!cart.store_id) return true;
                 return item.product.store_id === cart.store_id;
             })
-            .map((item: any) => {
-                const product = item.product;
+            .map((item: CartItemRow) => {
+                const product = item.product!;
 
                 // Find size price if size exists
                 let sizePrice = undefined;
                 if (item.size && product.sizes && Array.isArray(product.sizes)) {
-                    const s = product.sizes.find((s: any) => s.size === item.size);
-                    if (s) sizePrice = s.price;
+                    const sizeMatch = product.sizes.find((s) => s.size === item.size);
+                    if (sizeMatch) sizePrice = sizeMatch.price;
                 }
 
                 const pricing = getBestPrice(
@@ -227,8 +252,8 @@ export async function POST(request: NextRequest) {
         // Determine Base Price (Size price or Product price)
         let sizePrice = undefined;
         if (size && product.sizes && Array.isArray(product.sizes)) {
-            const s = product.sizes.find((s: any) => s.size === size);
-            if (s) sizePrice = s.price;
+            const sizeMatch = product.sizes.find((s: ProductSize) => s.size === size);
+            if (sizeMatch) sizePrice = sizeMatch.price;
         }
 
         // Check if item exists in cart (Product + Size)
@@ -364,8 +389,8 @@ export async function PUT(request: NextRequest) {
 
         let sizePrice = undefined;
         if (item.size && item.product.sizes && Array.isArray(item.product.sizes)) {
-            const s = item.product.sizes.find((s: any) => s.size === item.size);
-            if (s) sizePrice = s.price;
+            const sizeMatch = item.product.sizes.find((s: ProductSize) => s.size === item.size);
+            if (sizeMatch) sizePrice = sizeMatch.price;
         }
 
         const pricing = getBestPrice(item.product.price, item.product.wholesale_tiers || [], quantity, sizePrice);

@@ -21,6 +21,8 @@ const ensureAccess = async (userId: string, role: 'admin' | 'organizer', storeId
     .eq('id', storeId)
     .single();
   if (!store) return false;
+  // Admins can manage any store; organizers can only manage their own.
+  if (role === 'admin') return true;
   return store.organizer_id === userId;
 };
 

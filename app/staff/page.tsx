@@ -45,14 +45,6 @@ export default function StaffDashboard() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  useEffect(() => {
-    fetchProducts();
-  }, [staff]);
-
   const checkAuth = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/login'); return; }
@@ -75,6 +67,16 @@ export default function StaffDashboard() {
     const { data } = await query;
     if (data) setProducts(data);
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    checkAuth();
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchProducts();
+  }, [staff]);
 
   const lookupCode = async () => {
     if (!codeInput.trim()) return;
@@ -301,7 +303,7 @@ export default function StaffDashboard() {
             <span className="w-8 h-8 bg-[#EDE9FE] rounded-lg flex items-center justify-center text-sm">🎯</span>
             Train AI Recognition
           </h2>
-          <p className="text-slate-400 text-sm mb-4">Add photos of products that weren't recognized correctly</p>
+          <p className="text-slate-400 text-sm mb-4">Add photos of products that weren&apos;t recognized correctly</p>
           <div className="grid grid-cols-4 gap-3">
             {products.slice(0, 12).map((p, index) => (
               <button key={p.id} onClick={() => { setTrainingProduct(p.id); trainingFileRef.current?.click(); }}

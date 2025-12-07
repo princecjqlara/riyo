@@ -375,7 +375,7 @@ export default function ShopPage() {
             <div className="p-5 sticky top-0 bg-white z-30 border-b border-slate-100">
               <div className="flex justify-between items-center mb-5">
                 <div>
-                  <p className="text-slate-400 text-sm font-medium">Let's Explore</p>
+                  <p className="text-slate-400 text-sm font-medium">Let&apos;s Explore</p>
                   <h1 className="text-2xl font-black text-slate-900">{branding.title}</h1>
                 </div>
                 <div className="flex items-center gap-3">

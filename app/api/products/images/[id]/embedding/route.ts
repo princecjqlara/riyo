@@ -31,7 +31,7 @@ export async function POST(
     const { data, error } = await supabase
       .from('product_images')
       .update({
-        embedding: embeddingVector as any, // Supabase will handle vector conversion
+        embedding: embeddingVector, // Supabase will handle vector conversion
       })
       .eq('id', id)
       .select()
@@ -48,4 +48,3 @@ export async function POST(
     );
   }
 }
-

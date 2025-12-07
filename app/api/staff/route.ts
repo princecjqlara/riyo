@@ -92,7 +92,18 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
     if (error) throw error;
 
-    const staff = (data || []).map((member: any) => ({
+    type StaffRecord = {
+      id: string;
+      user_id: string;
+      name: string;
+      role: string;
+      store_id: string | null;
+      created_at: string;
+      store?: { name: string | null } | null;
+      user?: { email: string | null; full_name: string | null } | null;
+    };
+
+    const staff = (data || []).map((member: StaffRecord) => ({
       id: member.id,
       user_id: member.user_id,
       name: member.name,

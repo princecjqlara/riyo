@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
@@ -107,6 +107,18 @@ export default function AdminDashboard() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
   const activeStore = stores.find(s => s.id === currentStoreId);
+  const storeShareLink = useMemo(() => {
+    const target = activeStore || (storeEditId ? stores.find((s) => s.id === storeEditId) || null : null);
+    if (!target) return '';
+    if (typeof window === 'undefined') return '';
+    const slugOrId = target.slug || target.id;
+    return `${window.location.origin}/store/${slugOrId}`;
+  }, [activeStore, storeEditId, stores]);
+
+  const copyValue = (value: string) => {
+    if (!value) return;
+    navigator.clipboard?.writeText(value);
+  };
 
   useEffect(() => {
     checkAuth();
@@ -184,7 +196,7 @@ export default function AdminDashboard() {
   const saveStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeEditId || !storeEditName.trim()) {
-      setMessage('Select a store and enter a name.');
+      setMessage('Add a store first and enter a name.');
       return;
     }
     setStoreSaving(true);
@@ -540,28 +552,33 @@ export default function AdminDashboard() {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-400 font-bold">Active Store</p>
-              <p className="text-xl font-black text-slate-900">{activeStore?.name || 'Select a store'}</p>
+              <p className="text-xl font-black text-slate-900">{activeStore?.name || 'Your store'}</p>
               {activeStore?.slug && (
                 <p className="text-sm text-slate-400">/store/{activeStore.slug}</p>
               )}
             </div>
             <div className="flex items-center gap-3">
-              <select
-                value={currentStoreId}
-                onChange={(e) => setCurrentStoreId(e.target.value)}
-                className="rounded-xl border border-slate-200 px-4 py-2.5 bg-white shadow-sm focus:border-[#3478F6] focus:ring-[#3478F6]/20 focus:outline-none transition-all"
-              >
-                <option value="">Select store</option>
-                {stores.map(store => (
-                  <option key={store.id} value={store.id}>{store.name}</option>
-                ))}
-              </select>
+              <div className="rounded-xl border border-slate-200 px-4 py-3 bg-white shadow-sm min-w-[220px]">
+                <p className="text-sm font-semibold text-slate-900">{activeStore?.name || 'No store found'}</p>
+                <p className="text-xs text-slate-500 break-all">
+                  {activeStore?.id || 'Create a store to get started'}
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => activeStore?.id && navigator.clipboard?.writeText(activeStore.id)}
-                className="text-sm text-[#3478F6] font-medium hover:underline"
+                onClick={() => copyValue(activeStore?.id || '')}
+                disabled={!activeStore}
+                className="text-sm text-[#3478F6] font-medium hover:underline disabled:text-slate-300"
               >
                 Copy ID
+              </button>
+              <button
+                type="button"
+                onClick={() => copyValue(storeShareLink)}
+                disabled={!storeShareLink}
+                className="text-sm text-[#3478F6] font-medium hover:underline disabled:text-slate-300"
+              >
+                Copy store link
               </button>
             </div>
           </div>
@@ -916,27 +933,23 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h3 className="text-2xl font-black text-gray-900">Manage Stores</h3>
-                    <p className="text-gray-500 text-sm">Rename a store and copy its ID.</p>
+                    <p className="text-gray-500 text-sm">Rename your store, copy its ID, or share a public link.</p>
                   </div>
                   <span className="text-sm text-gray-500">{stores.length} total</span>
                 </div>
                 <form onSubmit={saveStore} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                   <div className="md:col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Store</label>
-                    <select
-                      value={storeEditId}
-                      onChange={(e) => {
-                        setStoreEditId(e.target.value);
-                        const match = stores.find((s) => s.id === e.target.value);
-                        if (match) setStoreEditName(match.name);
-                      }}
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-3 shadow-sm focus:border-gray-900 focus:ring-gray-900/10"
-                    >
-                      <option value="">Select a store</option>
-                      {stores.map((store) => (
-                        <option key={store.id} value={store.id}>{store.name}</option>
-                      ))}
-                    </select>
+                    <div className="w-full rounded-2xl border border-gray-200 px-4 py-4 shadow-sm bg-gray-50">
+                      <p className="text-sm font-semibold text-gray-900">{activeStore?.name || 'No store found'}</p>
+                      <p className="text-xs text-gray-500 break-all mt-1">{activeStore?.id || 'Create a store to begin'}</p>
+                      {activeStore?.slug && (
+                        <p className="text-xs text-gray-500 break-all mt-1">/store/{activeStore.slug}</p>
+                      )}
+                      {storeShareLink && (
+                        <p className="text-xs text-gray-400 break-all mt-1">{storeShareLink}</p>
+                      )}
+                    </div>
                   </div>
                   <div className="md:col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">New name</label>
@@ -958,11 +971,19 @@ export default function AdminDashboard() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => storeEditId && navigator.clipboard?.writeText(storeEditId)}
+                      onClick={() => copyValue(storeEditId)}
                       disabled={!storeEditId}
                       className="inline-flex items-center justify-center rounded-2xl bg-gray-100 px-4 py-3 text-gray-800 font-semibold border border-gray-200 hover:bg-gray-200 disabled:opacity-50"
                     >
                       Copy ID
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyValue(storeShareLink)}
+                      disabled={!storeShareLink}
+                      className="inline-flex items-center justify-center rounded-2xl bg-blue-50 px-4 py-3 text-blue-700 font-semibold border border-blue-100 hover:bg-blue-100 disabled:opacity-50"
+                    >
+                      Copy link
                     </button>
                   </div>
                 </form>
@@ -981,6 +1002,7 @@ export default function AdminDashboard() {
                         onClick={() => {
                           setStoreEditId(store.id);
                           setStoreEditName(store.name);
+                          setCurrentStoreId(store.id);
                         }}
                       >
                         Edit

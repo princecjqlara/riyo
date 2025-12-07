@@ -5,8 +5,9 @@
  * Note: This is a client-side implementation that runs in the browser
  * For server-side usage, consider using a different approach
  */
+import type { LayersModel, Tensor } from '@tensorflow/tfjs';
 
-let modelPromise: Promise<any> | null = null;
+let modelPromise: Promise<LayersModel> | null = null;
 
 /**
  * Load TensorFlow.js MobileNet model for image feature extraction
@@ -98,7 +99,7 @@ export async function generateEmbeddingFromFile(file: File): Promise<number[]> {
     const tensor = await imageToTensor(img);
 
     // Generate features
-    const features = model.predict(tensor) as any;
+    const features = model.predict(tensor) as Tensor;
 
     // Extract embedding as array
     const embedding = await features.data();

@@ -29,6 +29,7 @@ export default function StaffManagementPage() {
   const [renaming, setRenaming] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const selectedStore = stores.find((store) => store.id === selectedStoreId) || null;
 
   useEffect(() => {
     loadData();
@@ -217,18 +218,19 @@ export default function StaffManagementPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Store</label>
-                  <select
-                    value={selectedStoreId}
-                    onChange={(e) => setSelectedStoreId(e.target.value)}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  >
-                    <option value="">Select a store</option>
-                    {stores.map((store) => (
-                      <option key={store.id} value={store.id}>
-                        {store.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {selectedStore?.name || 'No store found'}
+                      </p>
+                      <p className="text-xs text-gray-500">Your admin store is used automatically.</p>
+                    </div>
+                    {selectedStore ? (
+                      <span className="text-xs font-mono text-gray-500 break-all">{selectedStore.id}</span>
+                    ) : (
+                      <span className="text-xs text-gray-500">Create a store to generate codes</span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
