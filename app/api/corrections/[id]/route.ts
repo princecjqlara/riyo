@@ -7,7 +7,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -19,7 +19,7 @@ export async function PUT(
       .from('user_profiles')
       .select('role')
       .eq('id', user.id)
-      .single();
+      .single() as { data: { role: string } | null };
 
     if (!profile || profile.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -32,12 +32,12 @@ export async function PUT(
     if (correct_item_id) updateData.correct_item_id = correct_item_id;
     if (status) updateData.status = status;
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('search_corrections')
       .update(updateData)
       .eq('id', id)
       .select()
-      .single();
+      .single() as Promise<{ data: unknown; error: Error | null }>);
 
     if (error) throw error;
 

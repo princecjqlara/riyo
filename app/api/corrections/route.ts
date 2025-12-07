@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       .from('user_profiles')
       .select('role')
       .eq('id', user.id)
-      .single();
+      .single() as { data: { role: string } | null };
 
     if (!profile || profile.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', status);
     }
 
-    const { data, error } = await query;
+    const { data, error } = await (query as unknown as Promise<{ data: unknown[]; error: Error | null }>);
 
     if (error) throw error;
 
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       correction_reason,
     } = body;
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('search_corrections')
       .insert({
         user_image_url: user_image_url || null,
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
         status: 'pending',
       })
       .select()
-      .single();
+      .single() as unknown as Promise<{ data: unknown; error: Error | null }>);
 
     if (error) throw error;
 
@@ -90,4 +90,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

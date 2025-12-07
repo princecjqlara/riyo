@@ -45,7 +45,7 @@ export async function PUT(
       .from('user_profiles')
       .select('role')
       .eq('id', user.id)
-      .single();
+      .single() as { data: { role: string } | null };
 
     if (!profile || (profile.role !== 'admin' && profile.role !== 'staff')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -104,7 +104,7 @@ export async function DELETE(
       .from('user_profiles')
       .select('role')
       .eq('id', user.id)
-      .single();
+      .single() as { data: { role: string } | null };
 
     if (!profile || profile.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -126,4 +126,3 @@ export async function DELETE(
     );
   }
 }
-
