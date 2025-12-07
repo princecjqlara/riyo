@@ -24,6 +24,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No images provided' }, { status: 400 });
         }
 
+        const supabase = getSupabase();
+
         // Get existing categories
         const { data: categories } = await supabase
             .from('categories')

@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
         const analysis = await analyzeProductImage(image);
 
         // Get existing categories for auto-categorization
+        const supabase = getSupabase();
         const { data: categories } = await supabase
             .from('categories')
             .select('id, name, parent_id');

@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Cart ID required' }, { status: 400 });
         }
 
+        const supabase = getSupabase();
+
         // Check if cart has items
         const { data: items } = await supabase
             .from('cart_items')
@@ -86,6 +88,8 @@ export async function GET(request: NextRequest) {
         if (!code) {
             return NextResponse.json({ error: 'Code required' }, { status: 400 });
         }
+
+        const supabase = getSupabase();
 
         // Find transfer code
         const { data: transfer } = await supabase
@@ -164,6 +168,8 @@ export async function PUT(request: NextRequest) {
         if (!transferId || !action) {
             return NextResponse.json({ error: 'Transfer ID and action required' }, { status: 400 });
         }
+
+        const supabase = getSupabase();
 
         // Get transfer
         const { data: transfer } = await supabase

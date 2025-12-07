@@ -16,6 +16,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No image provided' }, { status: 400 });
         }
 
+        const supabase = getSupabase();
+
         // Get all products
         const { data: products, error } = await supabase
             .from('items')
