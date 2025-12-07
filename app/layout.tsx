@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Baratillo - Image Price Lookup",
+  title: "Riyo - Image Price Lookup",
   description: "Find product prices by taking a picture",
 };
 

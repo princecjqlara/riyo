@@ -36,12 +36,6 @@ type CartItemRow = {
     product: ProductRow | null;
 };
 
-const isCartItemRow = (value: unknown): value is CartItemRow => {
-    if (!value || typeof value !== 'object') return false;
-    const row = value as Partial<CartItemRow>;
-    return typeof row.id === 'string' && typeof row.quantity === 'number';
-};
-
 // Get or create cart
 async function getOrCreateCart(
     supabase: ReturnType<typeof getSupabase>,

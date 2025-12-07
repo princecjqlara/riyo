@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navbar from '@/components/shared/Navbar';
 import type { Store } from '@/types';
 
 export default function OrganizerDashboard() {
   const [stores, setStores] = useState<Store[]>([]);
+  const [staff, setStaff] = useState<
+    { id: string; name: string; role: string; store_id: string | null; email?: string | null }[]
+  >([]);
   const [storeName, setStoreName] = useState('');
   const [storeForInvite, setStoreForInvite] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -19,6 +22,9 @@ export default function OrganizerDashboard() {
   const [message, setMessage] = useState<string | null>(null);
   const [renameStoreId, setRenameStoreId] = useState('');
   const [renameStoreName, setRenameStoreName] = useState('');
+  const [deletingStoreId, setDeletingStoreId] = useState('');
+  const [removingMemberId, setRemovingMemberId] = useState('');
+  const [manageStoreId, setManageStoreId] = useState('');
 
   // Pastel colors for store cards
   const pastelColors = [
@@ -52,7 +58,7 @@ export default function OrganizerDashboard() {
 
   const loadData = async () => {
     setLoading(true);
-    await fetchStores();
+    await Promise.all([fetchStores(), fetchStaff()]);
     setLoading(false);
   };
 
@@ -70,12 +76,26 @@ export default function OrganizerDashboard() {
           setRenameStoreId(data.stores[0].id);
           setRenameStoreName(data.stores[0].name);
         }
+        if (!manageStoreId && data.stores?.[0]) {
+          setManageStoreId(data.stores[0].id);
+        }
       } else {
         setMessage('Failed to load stores');
       }
     } catch (err) {
       console.error(err);
       setMessage('Failed to load stores');
+    }
+  };
+
+  const fetchStaff = async () => {
+    try {
+      const res = await fetch('/api/staff');
+      if (!res.ok) return;
+      const data = await res.json();
+      setStaff(data.staff || []);
+    } catch (err) {
+      console.error('Failed to load staff', err);
     }
   };
 
@@ -180,6 +200,75 @@ export default function OrganizerDashboard() {
     }
   };
 
+  const handleDeleteStore = async (storeId: string) => {
+    if (!storeId) return;
+    if (!confirm('Delete this store? This will remove it for all users.')) return;
+    setDeletingStoreId(storeId);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/stores', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: storeId }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to delete store');
+      setStores(stores.filter((s) => s.id !== storeId));
+      setStaff(staff.filter((m) => m.store_id !== storeId));
+      if (storeForInvite === storeId) {
+        setStoreForInvite(stores.find((s) => s.id !== storeId)?.id || '');
+        setJoinCode('');
+      }
+      if (renameStoreId === storeId) {
+        setRenameStoreId(stores.find((s) => s.id !== storeId)?.id || '');
+        setRenameStoreName('');
+      }
+      setMessage('Store deleted.');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to delete store');
+    } finally {
+      setDeletingStoreId('');
+    }
+  };
+
+  const removeMember = async (staffId: string) => {
+    if (!staffId) return;
+    if (!confirm('Remove this member from the store?')) return;
+    setRemovingMemberId(staffId);
+    try {
+      const res = await fetch('/api/staff', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to remove member');
+      setStaff((prev) => prev.filter((m) => m.id !== staffId));
+      setMessage('Member removed.');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to remove member');
+    } finally {
+      setRemovingMemberId('');
+    }
+  };
+
+  const staffByStore = useMemo(() => {
+    return staff.reduce<Record<string, number>>((acc, m) => {
+      if (m.store_id) acc[m.store_id] = (acc[m.store_id] || 0) + 1;
+      return acc;
+    }, {});
+  }, [staff]);
+
+  const selectedManageStore = useMemo(
+    () => stores.find((s) => s.id === manageStoreId) || null,
+    [manageStoreId, stores]
+  );
+
+  const membersForSelected = useMemo(
+    () => staff.filter((m) => m.store_id === manageStoreId),
+    [staff, manageStoreId]
+  );
+
   if (loading) {
     return (
       <ProtectedRoute requiredRole={['admin', 'organizer']}>
@@ -217,6 +306,26 @@ export default function OrganizerDashboard() {
               {message}
             </div>
           )}
+
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Stores</p>
+              <p className="text-3xl font-black text-slate-900 mt-1">{stores.length}</p>
+              <p className="text-slate-400 text-sm">Active storefronts</p>
+            </div>
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Team members</p>
+              <p className="text-3xl font-black text-slate-900 mt-1">{staff.length}</p>
+              <p className="text-slate-400 text-sm">Admins & staff across stores</p>
+            </div>
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg per store</p>
+              <p className="text-3xl font-black text-slate-900 mt-1">
+                {stores.length ? Math.round((staff.length / stores.length) * 10) / 10 : 0}
+              </p>
+              <p className="text-slate-400 text-sm">Members assigned</p>
+            </div>
+          </section>
 
           <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Create & Rename Store */}
@@ -377,6 +486,88 @@ export default function OrganizerDashboard() {
             </div>
           </section>
 
+          {/* Manage store & members */}
+          <section className="bg-white rounded-3xl shadow-xl shadow-slate-100 border border-slate-100 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Manage Store & Members</h2>
+                <p className="text-slate-400 text-sm">Switch stores, see metrics, remove admins/staff, or delete the store.</p>
+              </div>
+              {selectedManageStore && (
+                <span className="text-sm text-slate-500 bg-slate-50 px-3 py-1 rounded-full">
+                  {staffByStore[selectedManageStore.id] || 0} members
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Store</label>
+                <select
+                  value={manageStoreId}
+                  onChange={(e) => setManageStoreId(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#3478F6]/30 transition-all"
+                >
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Store name</label>
+                <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-slate-900">
+                  {selectedManageStore?.name || 'No store selected'}
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => selectedManageStore && handleDeleteStore(selectedManageStore.id)}
+                  disabled={!selectedManageStore || deletingStoreId === selectedManageStore?.id}
+                  className="flex-1 py-3 bg-rose-100 text-rose-600 font-bold rounded-xl hover:bg-rose-200 disabled:opacity-50 transition-all active:scale-[0.98]"
+                >
+                  {deletingStoreId === selectedManageStore?.id ? 'Deleting...' : 'Delete store'}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-slate-800">Members</h3>
+                <span className="text-xs text-slate-500">{membersForSelected.length} total</span>
+              </div>
+              {membersForSelected.length === 0 ? (
+                <p className="text-slate-400 text-sm">No admins or staff yet for this store.</p>
+              ) : (
+                <div className="space-y-2">
+                  {membersForSelected.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center justify-between bg-white rounded-xl border border-slate-100 px-4 py-2"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {member.name || member.email || 'Unknown'}
+                        </p>
+                        <p className="text-xs text-slate-500 uppercase">{member.role}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeMember(member.id)}
+                        disabled={removingMemberId === member.id}
+                        className="text-sm text-rose-600 font-semibold hover:underline disabled:opacity-50"
+                      >
+                        {removingMemberId === member.id ? 'Removing...' : 'Remove'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
           {/* Store List */}
           <section className="bg-white rounded-3xl shadow-xl shadow-slate-100 border border-slate-100 p-6">
             <div className="flex items-center justify-between mb-6">
@@ -399,6 +590,32 @@ export default function OrganizerDashboard() {
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-2 break-all font-mono">{store.id}</p>
+                    <div className="flex items-center justify-between mt-3">
+                      <span className="text-xs font-semibold text-slate-700 bg-white/70 px-2 py-1 rounded-full">
+                        {staffByStore[store.id] || 0} members
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManageStoreId(store.id);
+                            setRenameStoreId(store.id);
+                            setRenameStoreName(store.name);
+                          }}
+                          className="text-xs font-semibold text-slate-700 underline"
+                        >
+                          Manage
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteStore(store.id)}
+                          disabled={deletingStoreId === store.id}
+                          className="text-xs font-semibold text-rose-600 underline disabled:opacity-50"
+                        >
+                          {deletingStoreId === store.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

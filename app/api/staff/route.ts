@@ -92,7 +92,18 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
     if (error) throw error;
 
-    const staff = (data || []).map((member: any) => ({
+    type StaffRow = {
+      id: string;
+      user_id: string;
+      name: string;
+      role: string;
+      store_id: string | null;
+      created_at: string;
+      store?: { name?: string | null } | null;
+      user?: { email?: string | null; full_name?: string | null } | null;
+    };
+
+    const staff = ((data || []) as StaffRow[]).map((member) => ({
       id: member.id,
       user_id: member.user_id,
       name: member.name,
@@ -208,5 +219,62 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error('Update staff error:', error);
     return NextResponse.json({ error: 'Failed to update staff' }, { status: 500 });
+  }
+}
+
+// DELETE - Remove staff/admin from a store
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile || !roleSatisfies(['admin', 'organizer'], profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { staffId } = await request.json();
+    if (!staffId) {
+      return NextResponse.json({ error: 'staffId is required' }, { status: 400 });
+    }
+
+    const supabaseService = getServiceClient();
+    const { data: member, error: memberErr } = await supabaseService
+      .from('staff')
+      .select('id, store_id')
+      .eq('id', staffId)
+      .single();
+
+    if (memberErr || !member) {
+      return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+    }
+
+    if (profile.role !== 'admin') {
+      if (!member.store_id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const { data: store } = await supabaseService
+        .from('stores')
+        .select('organizer_id')
+        .eq('id', member.store_id)
+        .single();
+      if (!store || store.organizer_id !== user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
+    const { error } = await supabaseService.from('staff').delete().eq('id', staffId);
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Delete staff error:', error);
+    return NextResponse.json({ error: 'Failed to remove member' }, { status: 500 });
   }
 }

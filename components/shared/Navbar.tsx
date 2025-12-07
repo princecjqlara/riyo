@@ -23,7 +23,7 @@ export default function Navbar() {
         <div className="flex justify-between h-16">
           <div className="flex">
             <Link href="/" className="flex items-center px-2 py-2 text-xl font-bold text-indigo-600">
-              Baratillo
+              Riyo
             </Link>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               <Link

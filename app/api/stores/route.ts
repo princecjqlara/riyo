@@ -229,3 +229,51 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to update store' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile || !roleSatisfies(['admin', 'organizer'], profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { id } = await request.json();
+    if (!id || typeof id !== 'string') {
+      return NextResponse.json({ error: 'Store id is required' }, { status: 400 });
+    }
+
+    const { data: store, error: storeErr } = await supabase
+      .from('stores')
+      .select('organizer_id')
+      .eq('id', id)
+      .single();
+
+    if (storeErr || !store) {
+      return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+    }
+
+    if (profile.role !== 'admin' && store.organizer_id !== user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { error } = await supabase.from('stores').delete().eq('id', id);
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting store:', error);
+    return NextResponse.json({ error: 'Failed to delete store' }, { status: 500 });
+  }
+}
