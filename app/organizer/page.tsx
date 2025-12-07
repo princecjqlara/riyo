@@ -3,14 +3,16 @@
 import { useEffect, useState } from 'react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navbar from '@/components/shared/Navbar';
-import type { Store, StoreAdminInvite } from '@/types';
+import type { Store } from '@/types';
 
 export default function OrganizerDashboard() {
   const [stores, setStores] = useState<Store[]>([]);
-  const [invites, setInvites] = useState<StoreAdminInvite[]>([]);
   const [storeName, setStoreName] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
   const [storeForInvite, setStoreForInvite] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [codeStatus, setCodeStatus] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -22,9 +24,26 @@ export default function OrganizerDashboard() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!expiresAt) return;
+    const interval = setInterval(() => {
+      const seconds = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+      const minutes = Math.floor(seconds / 60);
+      const remainder = seconds % 60;
+      setCountdown(`${minutes}m ${remainder.toString().padStart(2, '0')}s`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+
+  useEffect(() => {
+    if (expiresAt && expiresAt < Date.now()) {
+      setCodeStatus('expired');
+    }
+  }, [expiresAt]);
+
   const loadData = async () => {
     setLoading(true);
-    await Promise.all([fetchStores(), fetchInvites()]);
+    await fetchStores();
     setLoading(false);
   };
 
@@ -36,6 +55,7 @@ export default function OrganizerDashboard() {
         setStores(data.stores || []);
         if (!storeForInvite && data.stores?.[0]) {
           setStoreForInvite(data.stores[0].id);
+          fetchJoinCode(data.stores[0].id, true);
         }
         if (!renameStoreId && data.stores?.[0]) {
           setRenameStoreId(data.stores[0].id);
@@ -50,15 +70,48 @@ export default function OrganizerDashboard() {
     }
   };
 
-  const fetchInvites = async () => {
+  const fetchJoinCode = async (storeId: string, autoCreate = false) => {
     try {
-      const res = await fetch('/api/stores/invite');
-      if (res.ok) {
-        const data = await res.json();
-        setInvites(data.invites || []);
+      const res = await fetch(`/api/stores/join-code?storeId=${storeId}&role=admin`);
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error || 'Failed to load join code');
       }
+      if (!body.code && autoCreate) {
+        await renewJoinCode();
+        return;
+      }
+      setJoinCode(body.code || '');
+      setExpiresAt(body.expiresAt ? new Date(body.expiresAt).getTime() : null);
+      setCodeStatus(body.status || null);
     } catch (err) {
       console.error(err);
+      setMessage(err instanceof Error ? err.message : 'Failed to load join code');
+    }
+  };
+
+  const renewJoinCode = async () => {
+    if (!storeForInvite) return;
+    setSubmitting(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/stores/join-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId: storeForInvite, role: 'admin' }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error || 'Failed to create code');
+      }
+      setJoinCode(body.code);
+      setExpiresAt(body.expiresAt ? new Date(body.expiresAt).getTime() : null);
+      setCodeStatus(body.status);
+      setMessage('New admin join code created.');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to create code');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -81,39 +134,10 @@ export default function OrganizerDashboard() {
       setStores([store, ...stores]);
       setStoreName('');
       setStoreForInvite(prev => prev || store.id);
+      fetchJoinCode(store.id, true);
       setMessage('Store created.');
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Failed to create store');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleInviteAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteEmail.trim() || !storeForInvite) {
-      setMessage('Select a store and enter an email.');
-      return;
-    }
-    setSubmitting(true);
-    setMessage(null);
-    try {
-      const res = await fetch('/api/stores/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeId: storeForInvite, email: inviteEmail.trim() }),
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        throw new Error(body.error || 'Failed to send invite');
-      }
-      if (body.invite) {
-        setInvites([body.invite, ...invites]);
-      }
-      setInviteEmail('');
-      setMessage(body.warning ? `Invite created, but email failed: ${body.warning}` : 'Invite sent.');
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Failed to send invite');
     } finally {
       setSubmitting(false);
     }
@@ -170,7 +194,7 @@ export default function OrganizerDashboard() {
         <main className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8 space-y-8">
           <div>
             <h1 className="text-3xl font-extrabold text-gray-900">Organizer Console</h1>
-            <p className="mt-2 text-gray-600">Create stores, rename them, and invite admins by email.</p>
+            <p className="mt-2 text-gray-600">Create stores, rename them, and share one-time admin codes.</p>
           </div>
 
           {message && (
@@ -245,13 +269,16 @@ export default function OrganizerDashboard() {
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Invite an Admin</h2>
-              <form onSubmit={handleInviteAdmin} className="space-y-4">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Admin Join Code</h2>
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Store</label>
                   <select
                     value={storeForInvite}
-                    onChange={(e) => setStoreForInvite(e.target.value)}
+                    onChange={(e) => {
+                      setStoreForInvite(e.target.value);
+                      if (e.target.value) fetchJoinCode(e.target.value, true);
+                    }}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                   >
                     <option value="">Select a store</option>
@@ -262,27 +289,64 @@ export default function OrganizerDashboard() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Admin email</label>
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="name@example.com"
-                  />
+
+                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
+                  <p className="text-xs text-gray-500 uppercase">Single-use code (10 minutes)</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-3xl font-mono font-semibold text-gray-900 tracking-[0.3em]">
+                      {submitting ? '••••••' : joinCode || '------'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={renewJoinCode}
+                      className="text-sm text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                      disabled={!storeForInvite || submitting}
+                    >
+                      Renew code
+                    </button>
+                  </div>
+                  <div className="mt-2 text-sm text-gray-600 flex items-center justify-between">
+                    <span>Expires in {expiresAt ? countdown : '—'}</span>
+                    {expiresAt && <span className="text-gray-500">{new Date(expiresAt).toLocaleTimeString()}</span>}
+                  </div>
+                  {codeStatus === 'used' && (
+                    <p className="text-xs text-red-600 mt-1">This code was used. Renew to invite another person.</p>
+                  )}
+                  {codeStatus === 'expired' && (
+                    <p className="text-xs text-red-600 mt-1">This code expired. Renew to get a fresh one.</p>
+                  )}
                 </div>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="inline-flex items-center justify-center rounded-md bg-green-600 px-4 py-2 text-white font-semibold shadow-sm hover:bg-green-700 disabled:opacity-60"
-                >
-                  {submitting ? 'Sending...' : 'Send invite'}
-                </button>
-              </form>
-              <p className="mt-3 text-xs text-gray-500">
-                Invited users receive a Supabase auth email and are tagged with the admin role for the selected store.
-              </p>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!joinCode) return;
+                      navigator.clipboard?.writeText(joinCode);
+                      setMessage('Code copied');
+                    }}
+                    disabled={!joinCode}
+                    className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-white text-sm font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    Copy code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!storeForInvite) return;
+                      navigator.clipboard?.writeText(storeForInvite);
+                      setMessage('Store ID copied');
+                    }}
+                    disabled={!storeForInvite}
+                    className="inline-flex items-center justify-center rounded-md bg-gray-200 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300 disabled:opacity-50"
+                  >
+                    Copy store ID
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Share this code and store ID with the admin you want to onboard. Each code can be used once.
+                </p>
+              </div>
             </div>
           </section>
 
@@ -310,43 +374,6 @@ export default function OrganizerDashboard() {
             )}
           </section>
 
-          <section className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Recent Admin Invites</h2>
-              <span className="text-sm text-gray-500">{invites.length} sent</span>
-            </div>
-            {invites.length === 0 ? (
-              <p className="text-gray-500 text-sm">No invites yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {invites.map((invite) => {
-                  const storeName = stores.find((s) => s.id === invite.store_id)?.name || 'Unknown store';
-                  const statusColor =
-                    invite.status === 'sent'
-                      ? 'bg-green-100 text-green-700'
-                      : invite.status === 'failed'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-gray-100 text-gray-700';
-                  return (
-                    <div key={invite.id} className="border border-gray-100 rounded-lg p-4 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-gray-900">{invite.email}</p>
-                          <p className="text-sm text-gray-500">{storeName}</p>
-                        </div>
-                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusColor}`}>
-                          {invite.status}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Sent {new Date(invite.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
         </main>
       </div>
     </ProtectedRoute>

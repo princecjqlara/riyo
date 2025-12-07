@@ -21,6 +21,7 @@ export default function StaffManagementPage() {
   const [selectedStoreId, setSelectedStoreId] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [codeStatus, setCodeStatus] = useState<string | null>(null);
   const [countdown, setCountdown] = useState('');
   const [codeLoading, setCodeLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -43,15 +44,15 @@ export default function StaffManagementPage() {
 
   useEffect(() => {
     if (!selectedStoreId) return;
-    fetchJoinCode(selectedStoreId);
+    fetchJoinCode(selectedStoreId, true);
   }, [selectedStoreId]);
 
   useEffect(() => {
-    if (!expiresAt || !selectedStoreId) return;
-    const refreshIn = Math.max(5000, expiresAt - Date.now() + 500);
-    const timer = setTimeout(() => fetchJoinCode(selectedStoreId), refreshIn);
-    return () => clearTimeout(timer);
-  }, [expiresAt, selectedStoreId]);
+    if (!expiresAt) return;
+    if (expiresAt < Date.now()) {
+      setCodeStatus('expired');
+    }
+  }, [expiresAt]);
 
   const loadData = async () => {
     setLoading(true);
@@ -90,19 +91,48 @@ export default function StaffManagementPage() {
     }
   };
 
-  const fetchJoinCode = async (storeId: string) => {
+  const fetchJoinCode = async (storeId: string, autoCreate = false) => {
     setCodeLoading(true);
     try {
-      const res = await fetch(`/api/stores/staff-code?storeId=${storeId}`);
+      const res = await fetch(`/api/stores/join-code?storeId=${storeId}&role=staff`);
       const body = await res.json();
       if (!res.ok) {
         throw new Error(body.error || 'Failed to load join code');
       }
-      setJoinCode(body.code);
-      setExpiresAt(body.expiresAt);
+      if (!body.code && autoCreate) {
+        await renewCode();
+        return;
+      }
+      setJoinCode(body.code || '');
+      setExpiresAt(body.expiresAt ? new Date(body.expiresAt).getTime() : null);
+      setCodeStatus(body.status || null);
     } catch (error) {
       console.error('Join code error:', error);
       setMessage(error instanceof Error ? error.message : 'Failed to load join code');
+    } finally {
+      setCodeLoading(false);
+    }
+  };
+
+  const renewCode = async () => {
+    if (!selectedStoreId) return;
+    setCodeLoading(true);
+    try {
+      const res = await fetch('/api/stores/join-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId: selectedStoreId, role: 'staff' }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error || 'Failed to create code');
+      }
+      setJoinCode(body.code);
+      setExpiresAt(body.expiresAt ? new Date(body.expiresAt).getTime() : null);
+      setCodeStatus(body.status);
+    } catch (error) {
+      console.error('Renew code error:', error);
+      setMessage(error instanceof Error ? error.message : 'Failed to renew code');
     } finally {
       setCodeLoading(false);
     }
@@ -149,7 +179,7 @@ export default function StaffManagementPage() {
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Current Store Code</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Staff Join Code</h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Store</label>
@@ -168,18 +198,18 @@ export default function StaffManagementPage() {
                 </div>
 
                 <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
-                  <p className="text-xs text-gray-500 uppercase">Join code (changes every 10 minutes)</p>
+                  <p className="text-xs text-gray-500 uppercase">Single-use code (10 minutes)</p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-3xl font-mono font-semibold text-gray-900 tracking-[0.3em]">
                       {codeLoading ? '••••••' : joinCode || '------'}
                     </span>
                     <button
                       type="button"
-                      onClick={() => fetchJoinCode(selectedStoreId)}
+                      onClick={renewCode}
                       className="text-sm text-indigo-600 hover:text-indigo-800"
                       disabled={!selectedStoreId || codeLoading}
                     >
-                      Refresh
+                      Renew code
                     </button>
                   </div>
                   <div className="mt-2 text-sm text-gray-600 flex items-center justify-between">
@@ -190,6 +220,12 @@ export default function StaffManagementPage() {
                       </span>
                     )}
                   </div>
+                  {codeStatus === 'used' && (
+                    <p className="text-xs text-red-600 mt-1">This code was used. Renew to invite another person.</p>
+                  )}
+                  {codeStatus === 'expired' && (
+                    <p className="text-xs text-red-600 mt-1">This code expired. Renew to get a fresh one.</p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -211,7 +247,7 @@ export default function StaffManagementPage() {
                   </button>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Share this code and store ID with staff. Codes rotate every 10 minutes and can be entered on the sign-up page.
+                  Share this code and store ID with staff. Each code can be used once and expires after 10 minutes.
                 </p>
               </div>
             </div>

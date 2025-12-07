@@ -27,17 +27,17 @@ export default function RegisterForm() {
     setError(null);
 
     try {
-      if (role === 'staff') {
+      if (role === 'staff' || role === 'admin') {
         if (!storeId.trim() || !joinCode.trim()) {
-          setError('Store ID and join code are required for staff sign-up.');
+          setError('Store ID and join code are required.');
           setLoading(false);
           return;
         }
 
-        const verifyRes = await fetch('/api/stores/staff-code', {
+        const verifyRes = await fetch('/api/stores/join-code/verify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ storeId: storeId.trim(), code: joinCode.trim() })
+          body: JSON.stringify({ storeId: storeId.trim(), code: joinCode.trim(), role, mode: 'check' })
         });
         const verifyBody = await verifyRes.json();
         if (!verifyRes.ok) {
@@ -82,6 +82,16 @@ export default function RegisterForm() {
           const staffBody = await staffRes.json();
           if (!staffRes.ok) {
             throw new Error(staffBody.error || 'Failed to finish staff setup');
+          }
+        } else if (role === 'admin') {
+          const consumeRes = await fetch('/api/stores/join-code/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storeId: storeId.trim(), code: joinCode.trim(), role, mode: 'consume', userId: authData.user.id })
+          });
+          const consumeBody = await consumeRes.json();
+          if (!consumeRes.ok) {
+            throw new Error(consumeBody.error || 'Failed to consume join code');
           }
         }
 
@@ -192,7 +202,7 @@ export default function RegisterForm() {
               </div>
             </div>
 
-            {role === 'staff' && (
+            {(role === 'staff' || role === 'admin') && (
               <>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Store ID</label>
@@ -216,7 +226,7 @@ export default function RegisterForm() {
                     onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 font-medium placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all tracking-[0.3em]"
                   />
-                  <p className="text-xs text-gray-400 mt-1">Ask an admin for the current 10-minute code for this store.</p>
+                  <p className="text-xs text-gray-400 mt-1">Ask an admin or organizer for the current single-use code for this store.</p>
                 </div>
               </>
             )}

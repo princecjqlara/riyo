@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { roleSatisfies } from '@/lib/roles';
-import { verifyStaffCode } from '@/lib/staffCodes';
+import { consumeJoinCode, verifyJoinCode } from '@/lib/joinCodes';
 
 const getServiceClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -121,14 +121,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User ID and name required' }, { status: 400 });
     }
 
-    if (role === 'staff') {
-      if (!storeId || !code) {
-        return NextResponse.json({ error: 'Store ID and join code are required' }, { status: 400 });
-      }
-      const verification = verifyStaffCode(storeId, code);
-      if (!verification.valid) {
-        return NextResponse.json({ error: 'Invalid or expired join code' }, { status: 400 });
-      }
+    if (!storeId || !code) {
+      return NextResponse.json({ error: 'Store ID and join code are required' }, { status: 400 });
+    }
+
+    if (role !== 'staff') {
+      return NextResponse.json({ error: 'Invalid role for staff creation' }, { status: 400 });
+    }
+
+    const verified = await verifyJoinCode({ storeId, role: 'staff', code });
+    if (!verified) {
+      return NextResponse.json({ error: 'Invalid or expired join code' }, { status: 400 });
     }
 
     const supabaseService = getServiceClient();
@@ -154,6 +157,11 @@ export async function POST(request: NextRequest) {
       if (!store) {
         return NextResponse.json({ error: 'Store not found' }, { status: 404 });
       }
+    }
+
+    const consumed = await consumeJoinCode({ id: verified.id, userId });
+    if (!consumed) {
+      return NextResponse.json({ error: 'Join code already used or expired' }, { status: 400 });
     }
 
     const { data: staff, error } = await supabaseService

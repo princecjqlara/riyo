@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { roleSatisfies } from '@/lib/roles';
-import { generateStaffCode, getCodeExpiry, verifyStaffCode } from '@/lib/staffCodes';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { getActiveCode, verifyJoinCode } from '@/lib/joinCodes';
 
 const getServiceClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -54,11 +54,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const now = Date.now();
-    const code = generateStaffCode(storeId, now);
-    const expiresAt = getCodeExpiry(now);
-
-    return NextResponse.json({ code, expiresAt });
+    const active = await getActiveCode(storeId, 'staff');
+    return NextResponse.json({
+      code: active?.code || null,
+      expiresAt: active?.expires_at || null,
+      status: active?.status || null,
+    });
   } catch (error) {
     console.error('Staff code GET error:', error);
     return NextResponse.json({ error: 'Failed to generate code' }, { status: 500 });
@@ -72,12 +73,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'storeId and code are required' }, { status: 400 });
     }
 
-    const verification = verifyStaffCode(storeId, code);
-    if (!verification.valid) {
+    const verification = await verifyJoinCode({ storeId, role: 'staff', code });
+    if (!verification) {
       return NextResponse.json({ error: 'Invalid or expired code' }, { status: 400 });
     }
 
-    return NextResponse.json({ storeId, expiresAt: verification.expiresAt });
+    return NextResponse.json({ storeId, expiresAt: verification.expires_at });
   } catch (error) {
     console.error('Staff code verify error:', error);
     return NextResponse.json({ error: 'Failed to verify code' }, { status: 500 });
