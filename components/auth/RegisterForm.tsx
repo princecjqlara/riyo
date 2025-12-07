@@ -11,6 +11,8 @@ export default function RegisterForm() {
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<'admin' | 'staff'>('staff');
   const [loading, setLoading] = useState(false);
+  const [storeId, setStoreId] = useState('');
+  const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -25,6 +27,24 @@ export default function RegisterForm() {
     setError(null);
 
     try {
+      if (role === 'staff') {
+        if (!storeId.trim() || !joinCode.trim()) {
+          setError('Store ID and join code are required for staff sign-up.');
+          setLoading(false);
+          return;
+        }
+
+        const verifyRes = await fetch('/api/stores/staff-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storeId: storeId.trim(), code: joinCode.trim() })
+        });
+        const verifyBody = await verifyRes.json();
+        if (!verifyRes.ok) {
+          throw new Error(verifyBody.error || 'Invalid store join code');
+        }
+      }
+
       // Sign up user
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -45,6 +65,25 @@ export default function RegisterForm() {
           });
 
         if (profileError) throw profileError;
+
+        if (role === 'staff') {
+          const staffRes = await fetch('/api/staff', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: authData.user.id,
+              name: fullName || email,
+              role: 'staff',
+              storeId: storeId.trim(),
+              code: joinCode.trim()
+            })
+          });
+
+          const staffBody = await staffRes.json();
+          if (!staffRes.ok) {
+            throw new Error(staffBody.error || 'Failed to finish staff setup');
+          }
+        }
 
         // Redirect based on role
         if (role === 'admin') {
@@ -152,6 +191,35 @@ export default function RegisterForm() {
                 </button>
               </div>
             </div>
+
+            {role === 'staff' && (
+              <>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Store ID</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Paste the store ID"
+                    value={storeId}
+                    onChange={(e) => setStoreId(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 font-medium placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Store Join Code</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    placeholder="6-digit code"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 font-medium placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all tracking-[0.3em]"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Ask an admin for the current 10-minute code for this store.</p>
+                </div>
+              </>
+            )}
 
             <button
               type="submit"
