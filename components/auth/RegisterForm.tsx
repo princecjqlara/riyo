@@ -111,56 +111,56 @@ export default function RegisterForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-6 font-sans">
-      {/* Background */}
-      <div className="fixed inset-0 z-0 pointer-events-none opacity-40">
-        <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-blue-100 to-transparent" />
-        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-purple-100 rounded-full blur-3xl opacity-60" />
+    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] py-12 px-6">
+      {/* Background decoration */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -left-40 w-80 h-80 bg-[#D4F5E9] rounded-full blur-3xl opacity-60" />
+        <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-[#FEF9C3] rounded-full blur-3xl opacity-60" />
       </div>
 
       <div className="relative z-10 max-w-md w-full">
-        <div className="bg-white rounded-3xl shadow-2xl shadow-gray-200/50 p-8 border border-gray-100 animate-fade-in">
+        <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 p-8 border border-slate-100 animate-fade-in">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
+            <div className="w-16 h-16 bg-gradient-to-br from-[#3478F6] to-[#7C3AED] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
               <span className="text-2xl text-white">👤</span>
             </div>
-            <h2 className="text-2xl font-black text-gray-900">Create Account</h2>
-            <p className="text-gray-400 text-sm mt-1">Join the PriceScan team</p>
+            <h2 className="text-2xl font-black text-slate-900">Create Account</h2>
+            <p className="text-slate-400 text-sm mt-1">Join the PriceScan team</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm font-medium border border-red-100 animate-shake">
+              <div className="p-4 bg-[#FFE4E6] text-rose-600 rounded-xl text-sm font-medium border border-rose-100 animate-shake">
                 {error}
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Full Name</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Full Name</label>
               <input
                 type="text"
                 placeholder="John Doe"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 font-medium placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3478F6]/30 focus:bg-white transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Email Address</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Email Address</label>
               <input
                 type="email"
                 required
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 font-medium placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3478F6]/30 focus:bg-white transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Password</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Password</label>
               <input
                 type="password"
                 required
@@ -168,36 +168,36 @@ export default function RegisterForm() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 font-medium placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3478F6]/30 focus:bg-white transition-all"
               />
-              <p className="text-xs text-gray-400 mt-1">Minimum 6 characters</p>
+              <p className="text-xs text-slate-400 mt-1">Minimum 6 characters</p>
             </div>
 
             {/* Role Selection */}
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Select Role</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Select Role</label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => setRole('staff')}
                   className={`p-4 rounded-2xl border-2 transition-all text-left ${role === 'staff'
-                    ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-500/10'
-                    : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}
+                    ? 'bg-[#D4F5E9] border-emerald-300 shadow-lg shadow-emerald-500/10'
+                    : 'bg-slate-50 border-transparent hover:border-slate-200'}`}
                 >
                   <div className="text-2xl mb-2">🧑‍💼</div>
-                  <div className="font-bold text-gray-900">Staff</div>
-                  <p className="text-xs text-gray-400 mt-1">Add products, scan items</p>
+                  <div className="font-bold text-slate-900">Staff</div>
+                  <p className="text-xs text-slate-400 mt-1">Process orders, scan items</p>
                 </button>
                 <button
                   type="button"
                   onClick={() => setRole('admin')}
                   className={`p-4 rounded-2xl border-2 transition-all text-left ${role === 'admin'
-                    ? 'border-purple-500 bg-purple-50 shadow-lg shadow-purple-500/10'
-                    : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}
+                    ? 'bg-[#FEF9C3] border-amber-300 shadow-lg shadow-amber-500/10'
+                    : 'bg-slate-50 border-transparent hover:border-slate-200'}`}
                 >
                   <div className="text-2xl mb-2">👑</div>
-                  <div className="font-bold text-gray-900">Admin</div>
-                  <p className="text-xs text-gray-400 mt-1">Full access, manage users</p>
+                  <div className="font-bold text-slate-900">Admin</div>
+                  <p className="text-xs text-slate-400 mt-1">Full access, manage users</p>
                 </button>
               </div>
             </div>
@@ -205,28 +205,28 @@ export default function RegisterForm() {
             {(role === 'staff' || role === 'admin') && (
               <>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Store ID</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Store ID</label>
                   <input
                     type="text"
                     required
                     placeholder="Paste the store ID"
                     value={storeId}
                     onChange={(e) => setStoreId(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 font-medium placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                    className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3478F6]/30 focus:bg-white transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Store Join Code</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Store Join Code</label>
                   <input
                     type="text"
                     required
                     maxLength={6}
-                    placeholder="6-digit code"
+                    placeholder="ABC123"
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 font-medium placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all tracking-[0.3em]"
+                    className="w-full px-4 py-3.5 bg-[#E0F2FE] border border-sky-100 rounded-xl text-slate-900 font-mono font-bold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3478F6]/30 focus:bg-white transition-all tracking-[0.3em] text-center text-lg"
                   />
-                  <p className="text-xs text-gray-400 mt-1">Ask an admin or organizer for the current single-use code for this store.</p>
+                  <p className="text-xs text-slate-400 mt-1">Ask an admin or organizer for the current single-use code.</p>
                 </div>
               </>
             )}
@@ -234,7 +234,7 @@ export default function RegisterForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-xl shadow-gray-900/20 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:scale-100 mt-6"
+              className="w-full py-4 bg-[#3478F6] text-white rounded-2xl font-bold shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all active:scale-[0.98] disabled:opacity-50 mt-6"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -247,26 +247,12 @@ export default function RegisterForm() {
             </button>
           </form>
 
-          <p className="text-center text-gray-400 mt-6 text-sm">
+          <p className="text-center text-slate-400 mt-6 text-sm">
             Already have an account?{' '}
-            <Link href="/login" className="text-blue-600 font-bold hover:underline">Sign In</Link>
+            <Link href="/login" className="text-[#3478F6] font-bold hover:underline">Sign In</Link>
           </p>
         </div>
       </div>
-
-      <style jsx global>{`
-        @keyframes fade-in {
-          0% { opacity: 0; transform: translateY(10px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in { animation: fade-in 0.4s ease-out; }
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          20%, 60% { transform: translateX(-5px); }
-          40%, 80% { transform: translateX(5px); }
-        }
-        .animate-shake { animation: shake 0.4s ease-in-out; }
-      `}</style>
     </div>
   );
 }

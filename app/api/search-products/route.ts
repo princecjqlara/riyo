@@ -12,9 +12,33 @@ export async function GET(request: NextRequest) {
         const query = searchParams.get('q')?.trim().toLowerCase();
         const categoryId = searchParams.get('category');
         const productCode = searchParams.get('code')?.trim();
+        const storeSlug = searchParams.get('storeSlug')?.trim().toLowerCase() || null;
+        const storeIdParam = searchParams.get('storeId');
+        let storeId: string | null = storeIdParam;
+
+        if (!storeId && storeSlug) {
+            const { data: store, error: storeError } = await getSupabase()
+                .from('stores')
+                .select('id')
+                .eq('slug', storeSlug)
+                .limit(1)
+                .single();
+            if (storeError) {
+                console.error('Store lookup error:', storeError);
+                return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+            }
+            storeId = store?.id || null;
+            if (!storeId) {
+                return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+            }
+        }
 
         // Build query
         let dbQuery = getSupabase().from('items').select('*');
+
+        if (storeId) {
+            dbQuery = dbQuery.eq('store_id', storeId);
+        }
 
         // Filter by category if provided
         if (categoryId) {

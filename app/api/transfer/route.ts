@@ -23,6 +23,16 @@ export async function POST(request: NextRequest) {
 
         const supabase = getSupabase();
 
+        const { data: cart } = await supabase
+            .from('carts')
+            .select('id, store_id')
+            .eq('id', cartId)
+            .single();
+
+        if (!cart) {
+            return NextResponse.json({ error: 'Cart not found' }, { status: 404 });
+        }
+
         // Check if cart has items
         const { data: items } = await supabase
             .from('cart_items')
@@ -59,6 +69,7 @@ export async function POST(request: NextRequest) {
             .insert({
                 code,
                 cart_id: cartId,
+                store_id: cart.store_id || null,
                 expires_at: expiresAt.toISOString(),
                 status: 'pending'
             })
@@ -84,6 +95,7 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const code = searchParams.get('code')?.toUpperCase();
+        const storeId = searchParams.get('storeId');
 
         if (!code) {
             return NextResponse.json({ error: 'Code required' }, { status: 400 });
@@ -100,6 +112,10 @@ export async function GET(request: NextRequest) {
 
         if (!transfer) {
             return NextResponse.json({ error: 'Invalid code' }, { status: 404 });
+        }
+
+        if (storeId && transfer.store_id && transfer.store_id !== storeId) {
+            return NextResponse.json({ error: 'Code not for this store' }, { status: 404 });
         }
 
         // Check expiry
@@ -124,7 +140,7 @@ export async function GET(request: NextRequest) {
         unit_price,
         is_wholesale,
         tier_label,
-        product:items(id, name, price, brand, image_url)
+        product:items(id, store_id, name, price, brand, image_url)
       `)
             .eq('cart_id', transfer.cart_id);
 
@@ -147,6 +163,7 @@ export async function GET(request: NextRequest) {
             code: transfer.code,
             status: transfer.status,
             expires_at: transfer.expires_at,
+            store_id: transfer.store_id,
             items: enrichedItems,
             total,
             total_discount: totalDiscount,
@@ -182,6 +199,17 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid or already processed' }, { status: 400 });
         }
 
+        if (transfer.store_id && staffId) {
+            const { data: staff } = await supabase
+                .from('staff')
+                .select('store_id')
+                .eq('id', staffId)
+                .single();
+            if (!staff || staff.store_id !== transfer.store_id) {
+                return NextResponse.json({ error: 'Staff not assigned to this store' }, { status: 403 });
+            }
+        }
+
         if (action === 'confirm') {
             // Get cart items for order
             const { data: items } = await supabase
@@ -191,7 +219,7 @@ export async function PUT(request: NextRequest) {
           unit_price,
           is_wholesale,
           tier_label,
-          product:items(id, name, price)
+          product:items(id, store_id, name, price)
         `)
                 .eq('cart_id', transfer.cart_id);
 
@@ -211,6 +239,7 @@ export async function PUT(request: NextRequest) {
                 .insert({
                     transfer_code_id: transferId,
                     staff_id: staffId || null,
+                    store_id: transfer.store_id || null,
                     total_amount: total,
                     total_discount: totalDiscount,
                     payment_method: paymentMethod || 'cash',

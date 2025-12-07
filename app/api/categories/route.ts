@@ -7,13 +7,37 @@ const getSupabase = () => createClient(
 );
 
 // GET - List all categories (with hierarchy)
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
+        const { searchParams } = new URL(request.url);
+        const storeSlug = searchParams.get('storeSlug')?.toLowerCase() || null;
+        const storeIdParam = searchParams.get('storeId');
+        let storeId = storeIdParam;
+
+        if (!storeId && storeSlug) {
+            const { data: store, error: storeError } = await getSupabase()
+                .from('stores')
+                .select('id')
+                .eq('slug', storeSlug)
+                .limit(1)
+                .single();
+            if (storeError || !store) {
+                return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+            }
+            storeId = store.id;
+        }
+
         const supabase = getSupabase();
-        const { data: categories, error } = await supabase
+        let query = supabase
             .from('categories')
             .select('*')
             .order('name');
+
+        if (storeId) {
+            query = query.or(`store_id.eq.${storeId},store_id.is.null`);
+        }
+
+        const { data: categories, error } = await query;
 
         if (error) throw error;
 
@@ -31,7 +55,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { name, parent_id, description } = body;
+        const { name, parent_id, description, storeId } = body;
 
         if (!name?.trim()) {
             return NextResponse.json({ error: 'Name required' }, { status: 400 });
@@ -44,6 +68,7 @@ export async function POST(request: NextRequest) {
                 name: name.trim(),
                 parent_id: parent_id || null,
                 description: description || null,
+                store_id: storeId || null,
             })
             .select()
             .single();

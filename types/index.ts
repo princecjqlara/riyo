@@ -13,6 +13,10 @@ export interface Store {
   id: string;
   name: string;
   organizer_id: string;
+  slug: string;
+  cover_url?: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
   created_at: string;
 }
 

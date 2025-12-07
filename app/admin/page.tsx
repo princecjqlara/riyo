@@ -34,10 +34,20 @@ interface StoreRow {
   id: string;
   name: string;
   organizer_id?: string;
+  slug?: string;
   created_at?: string;
 }
 
 type TabType = 'products' | 'categories' | 'search' | 'analytics' | 'bulk' | 'stores';
+
+// Pastel colors for cards
+const pastelColors = [
+  { bg: 'bg-[#D4F5E9]', accent: 'text-emerald-700' },
+  { bg: 'bg-[#FFE4E6]', accent: 'text-rose-600' },
+  { bg: 'bg-[#E0F2FE]', accent: 'text-sky-600' },
+  { bg: 'bg-[#FEF9C3]', accent: 'text-amber-600' },
+  { bg: 'bg-[#EDE9FE]', accent: 'text-violet-600' },
+];
 
 export default function AdminDashboard() {
   const [user, setUser] = useState<{ email: string } | null>(null);
@@ -96,11 +106,19 @@ export default function AdminDashboard() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+  const activeStore = stores.find(s => s.id === currentStoreId);
 
   useEffect(() => {
     checkAuth();
     fetchData();
   }, []);
+
+  useEffect(() => {
+    setSelectedProductIds([]);
+    setSearchResults([]);
+    if (!currentStoreId) return;
+    loadStoreData(currentStoreId);
+  }, [currentStoreId]);
 
   const checkAuth = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -126,16 +144,41 @@ export default function AdminDashboard() {
       console.error('Store fetch failed', err);
       setMessage('Could not load stores.');
     }
+  };
 
-    // Fetch products
-    const { data: prods } = await supabase.from('items').select('*').order('created_at', { ascending: false });
-    if (prods) setProducts(prods);
+  const loadStoreData = async (storeId: string) => {
+    await Promise.all([
+      fetchProducts(storeId),
+      fetchCategories(storeId),
+    ]);
+  };
 
-    // Fetch categories
-    const res = await fetch('/api/categories');
-    const data = await res.json();
-    if (data.categories) setCategories(data.categories);
-    if (data.tree) setCategoryTree(data.tree);
+  const fetchProducts = async (storeId: string) => {
+    try {
+      const res = await fetch(`/api/products?storeId=${storeId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setProducts(Array.isArray(data) ? data : []);
+      } else {
+        setProducts([]);
+      }
+    } catch (error) {
+      console.error('Failed to load products', error);
+      setProducts([]);
+    }
+  };
+
+  const fetchCategories = async (storeId: string) => {
+    try {
+      const res = await fetch(`/api/categories?storeId=${storeId}`);
+      const data = await res.json();
+      if (data.categories) setCategories(data.categories);
+      if (data.tree) setCategoryTree(data.tree);
+    } catch (error) {
+      console.error('Failed to load categories', error);
+      setCategories([]);
+      setCategoryTree([]);
+    }
   };
 
   const saveStore = async (e: React.FormEvent) => {
@@ -248,6 +291,7 @@ export default function AdminDashboard() {
   const saveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!price) { setMessage('Price required'); return; }
+    if (!currentStoreId) { setMessage('Choose a store first.'); return; }
     setSaving(true);
     try {
       const featuresArray = features.split(',').map(f => f.trim()).filter(Boolean);
@@ -268,20 +312,30 @@ export default function AdminDashboard() {
         product_code: productCode || null,
         sizes: sizes.length ? sizes : [],
         specifications: Object.keys(specsObj).length ? specsObj : {},
+        store_id: currentStoreId,
       };
 
       if (editingProductId) {
-        // UPDATE existing product
-        const { data, error } = await supabase.from('items').update(productData).eq('id', editingProductId).select().single();
-        if (error) throw error;
+        const res = await fetch(`/api/products/${editingProductId}?storeId=${currentStoreId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(productData),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'Failed to update product');
+        const data = body;
         setProducts(products.map(p => p.id === editingProductId ? data : p));
-        setMessage('✅ Product updated!');
+        setMessage('Product updated!');
       } else {
-        // INSERT new product
-        const { data, error } = await supabase.from('items').insert(productData).select().single();
-        if (error) throw error;
+        const res = await fetch('/api/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(productData),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save product');
         setProducts([data, ...products]);
-        setMessage('✅ Product saved!');
+        setMessage('Product saved!');
       }
 
       resetProductForm();
@@ -289,7 +343,6 @@ export default function AdminDashboard() {
     } catch (err) { setMessage('Error: ' + (err instanceof Error ? err.message : 'Failed')); }
     finally { setSaving(false); }
   };
-
   const resetProductForm = () => {
     setEditingProductId(null);
     setName(''); setPrice(''); setBrand(''); setDescription(''); setFeatures(''); setQuantity('');
@@ -317,9 +370,15 @@ export default function AdminDashboard() {
 
   const deleteProduct = async (id: string) => {
     if (!confirm('Delete?')) return;
-    await supabase.from('items').delete().eq('id', id);
-    setProducts(products.filter(p => p.id !== id));
-    setSelectedProductIds(selectedProductIds.filter(pid => pid !== id));
+    if (!currentStoreId) { setMessage('Choose a store first.'); return; }
+    const res = await fetch(`/api/products/${id}?storeId=${currentStoreId}`, { method: 'DELETE' });
+    if (res.ok) {
+      setProducts(products.filter(p => p.id !== id));
+      setSelectedProductIds(selectedProductIds.filter(pid => pid !== id));
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setMessage(body.error || 'Failed to delete product');
+    }
   };
 
   const toggleSelectProduct = (id: string) => {
@@ -330,11 +389,12 @@ export default function AdminDashboard() {
 
   const bulkDelete = async () => {
     if (selectedProductIds.length === 0) return;
+    if (!currentStoreId) { setMessage('Choose a store first.'); return; }
     if (!confirm(`Delete ${selectedProductIds.length} products?`)) return;
     const res = await fetch('/api/products', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: selectedProductIds })
+      body: JSON.stringify({ ids: selectedProductIds, storeId: currentStoreId })
     });
     if (res.ok) {
       setProducts(products.filter(p => !selectedProductIds.includes(p.id)));
@@ -352,12 +412,16 @@ export default function AdminDashboard() {
     const res = await fetch('/api/categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newCategoryName, parent_id: parentCategoryId || null }),
+      body: JSON.stringify({
+        name: newCategoryName,
+        parent_id: parentCategoryId || null,
+        storeId: currentStoreId || null,
+      }),
     });
     if (res.ok) {
       setNewCategoryName('');
       setParentCategoryId('');
-      fetchData();
+      if (currentStoreId) fetchCategories(currentStoreId);
       setMessage('✅ Category created!');
     }
   };
@@ -365,7 +429,7 @@ export default function AdminDashboard() {
   const deleteCategory = async (id: string) => {
     if (!confirm('Delete category and subcategories?')) return;
     await fetch(`/api/categories?id=${id}`, { method: 'DELETE' });
-    fetchData();
+    if (currentStoreId) fetchCategories(currentStoreId);
   };
 
   // === SEARCH & SCAN ===
@@ -440,42 +504,72 @@ export default function AdminDashboard() {
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-900">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+      <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-[#3478F6]"></div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-gray-900 selection:bg-orange-100 selection:text-orange-900">
-      {/* Background Gradients */}
-      <div className="fixed inset-0 z-0 pointer-events-none opacity-40">
-        <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-orange-100 to-transparent" />
-        <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-blue-100 rounded-full blur-3xl opacity-60" />
+    <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-800 selection:bg-blue-100 selection:text-blue-900">
+      {/* Background decoration */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-[#E0F2FE] rounded-full blur-3xl opacity-40" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-[#D4F5E9] rounded-full blur-3xl opacity-40" />
       </div>
 
       <div className="relative z-10">
         {/* Header */}
-        <header className="bg-white/80 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-40 shadow-sm transition-all duration-300">
+        <header className="bg-white border-b border-slate-100 shadow-sm sticky top-0 z-40">
           <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-2 group cursor-pointer hover:scale-105 transition-transform">
-              <span className="text-2xl">📦</span>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-[#3478F6] to-[#7C3AED] rounded-xl flex items-center justify-center">
+                <span className="text-white text-lg">📦</span>
+              </div>
               <div>
-                <h1 className="text-xl font-black italic bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent">Admin<span className="font-light text-gray-400">Panel</span></h1>
+                <h1 className="text-xl font-black text-slate-900">Admin<span className="font-normal text-slate-400">Panel</span></h1>
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-gray-400 text-sm font-medium bg-gray-50 px-3 py-1 rounded-full border border-gray-100">{user?.email}</span>
-              <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 text-sm font-bold transition-colors">Log Out</button>
+              <span className="text-slate-400 text-sm font-medium bg-slate-50 px-3 py-1.5 rounded-full">{user?.email}</span>
+              <button onClick={handleLogout} className="text-slate-400 hover:text-rose-500 text-sm font-semibold transition-colors">Log Out</button>
             </div>
           </div>
         </header>
 
         <main className="max-w-7xl mx-auto p-6 animate-fade-in-up">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400 font-bold">Active Store</p>
+              <p className="text-xl font-black text-slate-900">{activeStore?.name || 'Select a store'}</p>
+              {activeStore?.slug && (
+                <p className="text-sm text-slate-400">/store/{activeStore.slug}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <select
+                value={currentStoreId}
+                onChange={(e) => setCurrentStoreId(e.target.value)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 bg-white shadow-sm focus:border-[#3478F6] focus:ring-[#3478F6]/20 focus:outline-none transition-all"
+              >
+                <option value="">Select store</option>
+                {stores.map(store => (
+                  <option key={store.id} value={store.id}>{store.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => activeStore?.id && navigator.clipboard?.writeText(activeStore.id)}
+                className="text-sm text-[#3478F6] font-medium hover:underline"
+              >
+                Copy ID
+              </button>
+            </div>
+          </div>
           {/* Tabs */}
           <div className="flex gap-2 mb-8 overflow-x-auto pb-2 no-scrollbar">
             {(['products', 'categories', 'bulk', 'search', 'analytics', 'stores'] as TabType[]).map(tab => (
               <button key={tab} onClick={() => { setActiveTab(tab); setSearchResults([]); }}
-                className={`px-6 py-3 rounded-full font-bold text-sm whitespace-nowrap transition-all duration-300 shadow-sm hover:shadow-md active:scale-95 ${activeTab === tab ? 'bg-gray-900 text-white shadow-gray-900/20 scale-105' : 'bg-white text-gray-500 border border-gray-100 hover:bg-gray-50 hover:text-gray-900'}`}>
+                className={`px-5 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === tab ? 'bg-[#3478F6] text-white shadow-lg shadow-blue-500/25' : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50 hover:text-slate-900'}`}>
                 {tab === 'products'
                   ? '📦 Products'
                   : tab === 'categories'
@@ -492,25 +586,25 @@ export default function AdminDashboard() {
           </div>
 
           {message && (
-            <div className={`p-4 rounded-2xl mb-6 font-medium animate-bounce-in shadow-lg border backdrop-blur-sm ${message.includes('Error') ? 'bg-red-50 text-red-600 border-red-100' : message.includes('⚠️') ? 'bg-yellow-50 text-yellow-600 border-yellow-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
+            <div className={`p-4 rounded-2xl mb-6 font-medium animate-fade-in ${message.includes('Error') ? 'bg-[#FFE4E6] text-rose-600' : message.includes('⚠️') ? 'bg-[#FEF9C3] text-amber-600' : 'bg-[#D4F5E9] text-emerald-700'}`}>
               {message}
             </div>
           )}
 
           {/* BULK UPLOAD TAB */}
           {activeTab === 'bulk' && (
-            <div className="bg-white rounded-3xl p-8 shadow-xl shadow-gray-100 border border-gray-100 animate-slide-up">
+            <div className="bg-white rounded-3xl p-8 shadow-xl shadow-slate-100 border border-slate-100 animate-fade-in">
               <div className="text-center max-w-2xl mx-auto">
-                <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center text-4xl mx-auto mb-6 shadow-orange-100 shadow-lg">🚀</div>
-                <h2 className="text-3xl font-black text-gray-900 mb-2">Bulk Product Upload</h2>
-                <p className="text-gray-400 mb-8 text-lg">Upload multiple photos. Our AI will automatically detect details, categorize items, and create products for you.</p>
+                <div className="w-20 h-20 bg-[#E0F2FE] rounded-2xl flex items-center justify-center text-4xl mx-auto mb-6">🚀</div>
+                <h2 className="text-3xl font-black text-slate-900 mb-2">Bulk Product Upload</h2>
+                <p className="text-slate-400 mb-8 text-lg">Upload multiple photos. Our AI will automatically detect details, categorize items, and create products for you.</p>
               </div>
 
-              <div className="border-4 border-dashed border-gray-100 rounded-3xl p-12 text-center hover:border-orange-200 hover:bg-orange-50/30 transition-all cursor-pointer group"
+              <div className="border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center hover:border-[#3478F6] hover:bg-blue-50/30 transition-all cursor-pointer group"
                 onClick={() => document.getElementById('bulk-file')?.click()}>
                 <div className="text-6xl mb-6 group-hover:scale-110 transition-transform duration-300">📸</div>
-                <h3 className="text-gray-900 font-bold text-xl mb-2">Drop photos here</h3>
-                <p className="text-gray-400 font-medium">or click to browse (Max 20)</p>
+                <h3 className="text-slate-900 font-bold text-xl mb-2">Drop photos here</h3>
+                <p className="text-slate-400 font-medium">or click to browse (Max 20)</p>
                 <input id="bulk-file" type="file" multiple accept="image/*" className="hidden"
                   onChange={async (e) => {
                     const files = e.target.files;
@@ -545,9 +639,9 @@ export default function AdminDashboard() {
 
               {analyzing && (
                 <div className="mt-10 text-center animate-pulse">
-                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-orange-500 mb-4"></div>
-                  <p className="text-gray-900 font-bold text-lg">AI Vision Processing...</p>
-                  <p className="text-gray-400">Identifying products and extracting details</p>
+                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-[#3478F6] mb-4"></div>
+                  <p className="text-slate-900 font-bold text-lg">AI Vision Processing...</p>
+                  <p className="text-slate-400">Identifying products and extracting details</p>
                 </div>
               )}
             </div>
@@ -558,11 +652,11 @@ export default function AdminDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
               {/* Category Sidebar */}
               <div className="lg:col-span-1">
-                <div className="bg-white rounded-3xl p-6 shadow-xl shadow-gray-100 border border-gray-100 sticky top-24">
-                  <h3 className="text-gray-900 font-bold mb-4 uppercase tracking-wider text-xs">Categories</h3>
+                <div className="bg-white rounded-2xl p-5 shadow-lg shadow-slate-100 border border-slate-100 sticky top-24">
+                  <h3 className="text-slate-900 font-bold mb-4 uppercase tracking-wider text-xs">Categories</h3>
                   <button onClick={() => setSelectedCategory(null)}
-                    className={`w-full text-left px-4 py-3 rounded-2xl mb-2 font-bold text-sm transition-all ${!selectedCategory ? 'bg-gray-900 text-white shadow-lg shadow-gray-900/20' : 'text-gray-500 hover:bg-gray-50'}`}>
-                    All Products <span className="float-right opacity-50">{products.length}</span>
+                    className={`w-full text-left px-4 py-3 rounded-xl mb-2 font-semibold text-sm transition-all ${!selectedCategory ? 'bg-[#3478F6] text-white shadow-lg shadow-blue-500/25' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    All Products <span className="float-right opacity-60">{products.length}</span>
                   </button>
                   <div className="space-y-1 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
                     {categoryTree.map(cat => (
@@ -961,27 +1055,27 @@ export default function AdminDashboard() {
                     .filter(p => !analyticsCategory || p.category_id === analyticsCategory)
                     .sort((a, b) => (Number(b.scan_count) || 0) - (Number(a.scan_count) || 0))
                     .slice(0, 10)).map((p, idx) => (
-                    <div key={p.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-colors">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${idx < 3 ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                        {idx + 1}
+                      <div key={p.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-colors">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${idx < 3 ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                          {idx + 1}
+                        </div>
+                        <div className="w-14 h-14 bg-white rounded-xl overflow-hidden border border-gray-100">
+                          {p.image_url ? (
+                            <img src={p.image_url} alt="" className="w-full h-full object-cover mix-blend-multiply" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-2xl opacity-30">📦</div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-gray-900 truncate">{p.name}</h4>
+                          <p className="text-gray-400 text-xs">{p.brand || 'No Brand'} • ₱{p.price.toFixed(2)}</p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-black text-gray-900">{Number(p.scan_count) || 0}</div>
+                          <div className="text-xs text-gray-400">scans</div>
+                        </div>
                       </div>
-                      <div className="w-14 h-14 bg-white rounded-xl overflow-hidden border border-gray-100">
-                        {p.image_url ? (
-                          <img src={p.image_url} alt="" className="w-full h-full object-cover mix-blend-multiply" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-2xl opacity-30">📦</div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-gray-900 truncate">{p.name}</h4>
-                        <p className="text-gray-400 text-xs">{p.brand || 'No Brand'} • ₱{p.price.toFixed(2)}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-black text-gray-900">{Number(p.scan_count) || 0}</div>
-                        <div className="text-xs text-gray-400">scans</div>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
 
                   {products.length === 0 && (
                     <div className="text-center py-12 text-gray-400">
@@ -1072,3 +1166,4 @@ function CategoryTreeItem({ cat, onDelete, products, depth = 0 }: {
     </div>
   );
 }
+

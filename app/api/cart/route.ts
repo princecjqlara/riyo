@@ -13,21 +13,51 @@ interface WholesaleTier {
 }
 
 // Get or create cart
-async function getOrCreateCart(supabase: ReturnType<typeof getSupabase>, sessionId: string) {
-    let { data: cart } = await supabase
+async function getOrCreateCart(
+    supabase: ReturnType<typeof getSupabase>,
+    sessionId: string,
+    storeId?: string | null
+) {
+    let query = supabase
         .from('carts')
         .select('*')
-        .eq('session_id', sessionId)
-        .single();
+        .eq('session_id', sessionId);
+
+    if (storeId) {
+        query = query.eq('store_id', storeId);
+    }
+
+    const { data: carts, error } = await query.limit(1);
+    if (error) throw error;
+
+    let cart = carts?.[0] || null;
+
+    if (cart && storeId && cart.store_id && cart.store_id !== storeId) {
+        cart = null;
+    }
+
+    if (!cart && !storeId) {
+        // Try any cart for this session before creating new
+        const { data: fallback } = await supabase
+            .from('carts')
+            .select('*')
+            .eq('session_id', sessionId)
+            .limit(1);
+        if (fallback && fallback[0]) {
+            cart = fallback[0];
+        }
+    }
 
     if (!cart) {
-        const { data: newCart } = await supabase
+        const { data: newCart, error: insertError } = await supabase
             .from('carts')
-            .insert({ session_id: sessionId })
+            .insert({ session_id: sessionId, store_id: storeId || null })
             .select()
             .single();
+        if (insertError) throw insertError;
         cart = newCart;
     }
+
     return cart;
 }
 
@@ -70,13 +100,14 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const sessionId = searchParams.get('session');
+        const storeId = searchParams.get('storeId');
 
         if (!sessionId) {
             return NextResponse.json({ error: 'Session required' }, { status: 400 });
         }
 
         const supabase = getSupabase();
-        const cart = await getOrCreateCart(supabase, sessionId);
+        const cart = await getOrCreateCart(supabase, sessionId, storeId);
         if (!cart) {
             return NextResponse.json({ items: [], total: 0, discount: 0 });
         }
@@ -91,7 +122,7 @@ export async function GET(request: NextRequest) {
         is_wholesale,
         tier_label,
         size,
-        product:items(id, name, price, brand, image_url, additional_images, wholesale_tiers, quantity as stock, sizes)
+        product:items(id, store_id, name, price, brand, image_url, additional_images, wholesale_tiers, quantity as stock, sizes)
       `)
             .eq('cart_id', cart.id);
 
@@ -99,37 +130,42 @@ export async function GET(request: NextRequest) {
         let total = 0;
         let totalDiscount = 0;
 
-        const enrichedItems = (items || []).map((item: any) => {
-            const product = item.product;
+        const enrichedItems = (items || [])
+            .filter((item: any) => {
+                if (!cart.store_id || !item.product) return true;
+                return item.product.store_id === cart.store_id;
+            })
+            .map((item: any) => {
+                const product = item.product;
 
-            // Find size price if size exists
-            let sizePrice = undefined;
-            if (item.size && product.sizes && Array.isArray(product.sizes)) {
-                const s = product.sizes.find((s: any) => s.size === item.size);
-                if (s) sizePrice = s.price;
-            }
+                // Find size price if size exists
+                let sizePrice = undefined;
+                if (item.size && product.sizes && Array.isArray(product.sizes)) {
+                    const s = product.sizes.find((s: any) => s.size === item.size);
+                    if (s) sizePrice = s.price;
+                }
 
-            const pricing = getBestPrice(
-                product.price,
-                (product.wholesale_tiers || []) as WholesaleTier[],
-                item.quantity,
-                sizePrice
-            );
+                const pricing = getBestPrice(
+                    product.price,
+                    (product.wholesale_tiers || []) as WholesaleTier[],
+                    item.quantity,
+                    sizePrice
+                );
 
-            const subtotal = pricing.price * item.quantity;
-            total += subtotal;
-            totalDiscount += pricing.discount;
+                const subtotal = pricing.price * item.quantity;
+                total += subtotal;
+                totalDiscount += pricing.discount;
 
-            return {
-                ...item,
-                unit_price: pricing.price,
-                is_wholesale: pricing.isWholesale,
-                tier_label: pricing.tierLabel,
-                retail_price: sizePrice || product.price,
-                subtotal,
-                discount: pricing.discount
-            };
-        });
+                return {
+                    ...item,
+                    unit_price: pricing.price,
+                    is_wholesale: pricing.isWholesale,
+                    tier_label: pricing.tierLabel,
+                    retail_price: sizePrice || product.price,
+                    subtotal,
+                    discount: pricing.discount
+                };
+            });
 
         return NextResponse.json({
             cart_id: cart.id,
@@ -149,15 +185,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { sessionId, productId, quantity = 1, size } = body;
+        const { sessionId, productId, quantity = 1, size, storeId } = body;
 
         if (!sessionId || !productId) {
             return NextResponse.json({ error: 'Session and product required' }, { status: 400 });
         }
 
         const supabase = getSupabase();
-        const cart = await getOrCreateCart(supabase, sessionId);
-
         // Get product
         const { data: product } = await supabase
             .from('items')
@@ -167,6 +201,27 @@ export async function POST(request: NextRequest) {
 
         if (!product) {
             return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+        }
+
+        const targetStoreId = storeId || product.store_id || null;
+        if (!targetStoreId) {
+            return NextResponse.json({ error: 'Store required for cart' }, { status: 400 });
+        }
+
+        const cart = await getOrCreateCart(supabase, sessionId, targetStoreId);
+
+        if (product.store_id && product.store_id !== targetStoreId) {
+            return NextResponse.json({ error: 'Product does not belong to this store' }, { status: 400 });
+        }
+
+        if (cart.store_id && cart.store_id !== product.store_id && product.store_id) {
+            return NextResponse.json({ error: 'Cart is locked to a different store' }, { status: 400 });
+        }
+
+        // Attach store to cart if missing
+        if (!cart.store_id && product.store_id) {
+            await supabase.from('carts').update({ store_id: product.store_id }).eq('id', cart.id);
+            cart.store_id = product.store_id;
         }
 
         // Determine Base Price (Size price or Product price)
@@ -278,7 +333,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
-        const { sessionId, itemId, quantity } = body;
+        const { sessionId, itemId, quantity, storeId } = body;
 
         if (!sessionId || !itemId || quantity === undefined) {
             return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
@@ -301,6 +356,10 @@ export async function PUT(request: NextRequest) {
 
         if (!item) {
             return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+        }
+
+        if (storeId && item.product?.store_id && item.product.store_id !== storeId) {
+            return NextResponse.json({ error: 'Item belongs to a different store' }, { status: 400 });
         }
 
         let sizePrice = undefined;

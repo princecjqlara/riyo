@@ -10,7 +10,7 @@ const getSupabase = () => createClient(
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { image } = body;
+        const { image, storeId } = body;
 
         if (!image) {
             return NextResponse.json({ error: 'No image provided' }, { status: 400 });
@@ -19,10 +19,16 @@ export async function POST(request: NextRequest) {
         const supabase = getSupabase();
 
         // Get all products
-        const { data: products, error } = await supabase
+        let productQuery = supabase
             .from('items')
             .select('*')
             .order('created_at', { ascending: false });
+
+        if (storeId) {
+            productQuery = productQuery.eq('store_id', storeId);
+        }
+
+        const { data: products, error } = await productQuery;
 
         if (error) {
             console.error('Database error:', error);

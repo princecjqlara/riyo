@@ -14,15 +14,14 @@ const getServiceClient = () => {
 };
 
 const ensureAccess = async (userId: string, role: 'admin' | 'organizer', storeId: string) => {
-  if (role === 'admin') return true;
   const supabaseService = getServiceClient();
   const { data: store } = await supabaseService
     .from('stores')
-    .select('id')
+    .select('organizer_id')
     .eq('id', storeId)
-    .eq('organizer_id', userId)
     .single();
-  return Boolean(store);
+  if (!store) return false;
+  return store.organizer_id === userId;
 };
 
 export async function GET(request: NextRequest) {

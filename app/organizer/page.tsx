@@ -20,6 +20,15 @@ export default function OrganizerDashboard() {
   const [renameStoreId, setRenameStoreId] = useState('');
   const [renameStoreName, setRenameStoreName] = useState('');
 
+  // Pastel colors for store cards
+  const pastelColors = [
+    'bg-[#D4F5E9]',
+    'bg-[#FFE4E6]',
+    'bg-[#E0F2FE]',
+    'bg-[#FEF9C3]',
+    'bg-[#EDE9FE]',
+  ];
+
   useEffect(() => {
     loadData();
   }, []);
@@ -173,13 +182,13 @@ export default function OrganizerDashboard() {
 
   if (loading) {
     return (
-    <ProtectedRoute requiredRole={['admin', 'organizer']}>
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
+      <ProtectedRoute requiredRole={['admin', 'organizer']}>
+        <div className="min-h-screen bg-[#f8fafc]">
+          <Navbar />
           <main className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading organizer tools...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-[#3478F6] mx-auto"></div>
+              <p className="mt-4 text-slate-400">Loading organizer tools...</p>
             </div>
           </main>
         </div>
@@ -189,47 +198,61 @@ export default function OrganizerDashboard() {
 
   return (
     <ProtectedRoute requiredRole={['admin', 'organizer']}>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#f8fafc]">
+        {/* Background decoration */}
+        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-96 h-96 bg-[#EDE9FE] rounded-full blur-3xl opacity-40" />
+          <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-[#D4F5E9] rounded-full blur-3xl opacity-40" />
+        </div>
+
         <Navbar />
-        <main className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8 space-y-8">
+        <main className="relative z-10 max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8 space-y-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900">Organizer Console</h1>
-            <p className="mt-2 text-gray-600">Create stores, rename them, and share one-time admin codes.</p>
+            <h1 className="text-3xl font-black text-slate-900">Organizer Console</h1>
+            <p className="mt-2 text-slate-400">Create stores, rename them, and share one-time admin codes.</p>
           </div>
 
           {message && (
-            <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 shadow-sm">
+            <div className={`p-4 rounded-2xl font-medium animate-fade-in ${message.includes('created') || message.includes('updated') ? 'bg-[#D4F5E9] text-emerald-700' : 'bg-[#FFE4E6] text-rose-600'}`}>
               {message}
             </div>
           )}
 
           <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Create a Store</h2>
+            {/* Create & Rename Store */}
+            <div className="bg-white rounded-3xl shadow-xl shadow-slate-100 border border-slate-100 p-6">
+              <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <span className="w-8 h-8 bg-[#D4F5E9] rounded-lg flex items-center justify-center text-sm">🏪</span>
+                Create a Store
+              </h2>
               <form onSubmit={handleCreateStore} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Store name</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Store name</label>
                   <input
                     type="text"
                     value={storeName}
                     onChange={(e) => setStoreName(e.target.value)}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3478F6]/30 focus:bg-white transition-all"
                     placeholder="e.g. Main Street"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-white font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+                  className="w-full py-3 bg-[#3478F6] text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all active:scale-[0.98] disabled:opacity-50"
                 >
                   {submitting ? 'Creating...' : 'Create store'}
                 </button>
               </form>
-              <div className="mt-8 border-t border-gray-100 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Rename a Store</h3>
+
+              <div className="mt-8 border-t border-slate-100 pt-6">
+                <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#FEF9C3] rounded-md flex items-center justify-center text-xs">✏️</span>
+                  Rename a Store
+                </h3>
                 <form onSubmit={handleRenameStore} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Select store</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Select store</label>
                     <select
                       value={renameStoreId}
                       onChange={(e) => {
@@ -237,7 +260,7 @@ export default function OrganizerDashboard() {
                         const match = stores.find((s) => s.id === e.target.value);
                         if (match) setRenameStoreName(match.name);
                       }}
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#3478F6]/30 transition-all"
                     >
                       <option value="">Choose a store</option>
                       {stores.map((store) => (
@@ -248,19 +271,19 @@ export default function OrganizerDashboard() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">New name</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">New name</label>
                     <input
                       type="text"
                       value={renameStoreName}
                       onChange={(e) => setRenameStoreName(e.target.value)}
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3478F6]/30 focus:bg-white transition-all"
                       placeholder="Enter new store name"
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={renaming}
-                    className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-white font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+                    className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl shadow-lg shadow-slate-900/15 hover:shadow-slate-900/25 transition-all active:scale-[0.98] disabled:opacity-50"
                   >
                     {renaming ? 'Renaming...' : 'Rename store'}
                   </button>
@@ -268,18 +291,22 @@ export default function OrganizerDashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Admin Join Code</h2>
+            {/* Admin Join Code */}
+            <div className="bg-white rounded-3xl shadow-xl shadow-slate-100 border border-slate-100 p-6">
+              <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <span className="w-8 h-8 bg-[#EDE9FE] rounded-lg flex items-center justify-center text-sm">🔑</span>
+                Admin Join Code
+              </h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Store</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Store</label>
                   <select
                     value={storeForInvite}
                     onChange={(e) => {
                       setStoreForInvite(e.target.value);
                       if (e.target.value) fetchJoinCode(e.target.value, true);
                     }}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#3478F6]/30 transition-all"
                   >
                     <option value="">Select a store</option>
                     {stores.map((store) => (
@@ -290,30 +317,30 @@ export default function OrganizerDashboard() {
                   </select>
                 </div>
 
-                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
-                  <p className="text-xs text-gray-500 uppercase">Single-use code (10 minutes)</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-3xl font-mono font-semibold text-gray-900 tracking-[0.3em]">
+                <div className="bg-[#E0F2FE] rounded-2xl p-5 border-2 border-dashed border-sky-200">
+                  <p className="text-xs text-sky-600 uppercase font-bold mb-2">Single-use code (10 minutes)</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-3xl font-mono font-black text-slate-900 tracking-[0.3em]">
                       {submitting ? '••••••' : joinCode || '------'}
                     </span>
                     <button
                       type="button"
                       onClick={renewJoinCode}
-                      className="text-sm text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                      className="text-sm text-[#3478F6] hover:text-blue-700 font-semibold disabled:opacity-50"
                       disabled={!storeForInvite || submitting}
                     >
-                      Renew code
+                      Renew
                     </button>
                   </div>
-                  <div className="mt-2 text-sm text-gray-600 flex items-center justify-between">
-                    <span>Expires in {expiresAt ? countdown : '—'}</span>
-                    {expiresAt && <span className="text-gray-500">{new Date(expiresAt).toLocaleTimeString()}</span>}
+                  <div className="mt-3 text-sm text-slate-600 flex items-center justify-between">
+                    <span>Expires in <strong>{expiresAt ? countdown : '—'}</strong></span>
+                    {expiresAt && <span className="text-slate-400 text-xs">{new Date(expiresAt).toLocaleTimeString()}</span>}
                   </div>
                   {codeStatus === 'used' && (
-                    <p className="text-xs text-red-600 mt-1">This code was used. Renew to invite another person.</p>
+                    <p className="text-xs text-rose-500 mt-2 font-medium">This code was used. Renew to invite another person.</p>
                   )}
                   {codeStatus === 'expired' && (
-                    <p className="text-xs text-red-600 mt-1">This code expired. Renew to get a fresh one.</p>
+                    <p className="text-xs text-rose-500 mt-2 font-medium">This code expired. Renew to get a fresh one.</p>
                   )}
                 </div>
 
@@ -326,7 +353,7 @@ export default function OrganizerDashboard() {
                       setMessage('Code copied');
                     }}
                     disabled={!joinCode}
-                    className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-white text-sm font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+                    className="flex-1 py-3 bg-[#3478F6] text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 disabled:opacity-50 transition-all active:scale-[0.98]"
                   >
                     Copy code
                   </button>
@@ -338,36 +365,40 @@ export default function OrganizerDashboard() {
                       setMessage('Store ID copied');
                     }}
                     disabled={!storeForInvite}
-                    className="inline-flex items-center justify-center rounded-md bg-gray-200 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300 disabled:opacity-50"
+                    className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 disabled:opacity-50 transition-all active:scale-[0.98]"
                   >
                     Copy store ID
                   </button>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-slate-400">
                   Share this code and store ID with the admin you want to onboard. Each code can be used once.
                 </p>
               </div>
             </div>
           </section>
 
-          <section className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Your Stores</h2>
-              <span className="text-sm text-gray-500">{stores.length} total</span>
+          {/* Store List */}
+          <section className="bg-white rounded-3xl shadow-xl shadow-slate-100 border border-slate-100 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <span className="w-8 h-8 bg-[#FFE4E6] rounded-lg flex items-center justify-center text-sm">🏬</span>
+                Your Stores
+              </h2>
+              <span className="text-sm text-slate-400 bg-slate-50 px-3 py-1 rounded-full">{stores.length} total</span>
             </div>
             {stores.length === 0 ? (
-              <p className="text-gray-500 text-sm">No stores yet. Create one to get started.</p>
+              <p className="text-slate-400 text-sm text-center py-8">No stores yet. Create one to get started.</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {stores.map((store) => (
-                  <div key={store.id} className="border border-gray-100 rounded-lg p-4 shadow-sm">
+                {stores.map((store, index) => (
+                  <div key={store.id} className={`${pastelColors[index % pastelColors.length]} rounded-2xl p-5 transition-all hover:shadow-lg`}>
                     <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-gray-900">{store.name}</h3>
-                      <span className="text-xs text-gray-500">
+                      <h3 className="font-bold text-slate-900 text-lg">{store.name}</h3>
+                      <span className="text-xs text-slate-500 bg-white/60 px-2 py-1 rounded-full">
                         {new Date(store.created_at).toLocaleDateString()}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-2 break-all">{store.id}</p>
+                    <p className="text-xs text-slate-500 mt-2 break-all font-mono">{store.id}</p>
                   </div>
                 ))}
               </div>
