@@ -13,7 +13,7 @@ interface WholesaleTier {
 }
 
 // Get or create cart
-async function getOrCreateCart(sessionId: string) {
+async function getOrCreateCart(supabase: ReturnType<typeof getSupabase>, sessionId: string) {
     let { data: cart } = await supabase
         .from('carts')
         .select('*')
@@ -75,7 +75,8 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Session required' }, { status: 400 });
         }
 
-        const cart = await getOrCreateCart(sessionId);
+        const supabase = getSupabase();
+        const cart = await getOrCreateCart(supabase, sessionId);
         if (!cart) {
             return NextResponse.json({ items: [], total: 0, discount: 0 });
         }
@@ -154,7 +155,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Session and product required' }, { status: 400 });
         }
 
-        const cart = await getOrCreateCart(sessionId);
+        const supabase = getSupabase();
+        const cart = await getOrCreateCart(supabase, sessionId);
 
         // Get product
         const { data: product } = await supabase
@@ -242,9 +244,11 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
         }
 
+        const supabase = getSupabase();
+
         if (quantity <= 0) {
             // Remove item
-            await getSupabase().from('cart_items').delete().eq('id', itemId);
+            await supabase.from('cart_items').delete().eq('id', itemId);
             return NextResponse.json({ success: true, removed: true });
         }
 
