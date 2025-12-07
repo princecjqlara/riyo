@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
+const getSupabase = () => createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
         const productCode = searchParams.get('code')?.trim();
 
         // Build query
-        let dbQuery = supabase.from('items').select('*');
+        let dbQuery = getSupabase().from('items').select('*');
 
         // Filter by category if provided
         if (categoryId) {
@@ -104,3 +104,4 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Search failed' }, { status: 500 });
     }
 }
+

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
+const getSupabase = () => createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
@@ -244,7 +244,7 @@ export async function PUT(request: NextRequest) {
 
         if (quantity <= 0) {
             // Remove item
-            await supabase.from('cart_items').delete().eq('id', itemId);
+            await getSupabase().from('cart_items').delete().eq('id', itemId);
             return NextResponse.json({ success: true, removed: true });
         }
 
@@ -300,7 +300,7 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'Item ID required' }, { status: 400 });
         }
 
-        await supabase.from('cart_items').delete().eq('id', itemId);
+        await getSupabase().from('cart_items').delete().eq('id', itemId);
 
         return NextResponse.json({ success: true });
 
@@ -309,3 +309,4 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to remove' }, { status: 500 });
     }
 }
+

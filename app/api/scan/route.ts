@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { searchByImage } from '@/lib/nvidia-dino';
 
-const supabase = createClient(
+const getSupabase = () => createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
@@ -185,3 +185,4 @@ function findSimilarProducts(
 
     return scored.map(({ product }) => product);
 }
+

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
+const getSupabase = () => createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
@@ -228,14 +228,14 @@ export async function PUT(request: NextRequest) {
                 };
             });
 
-            await supabase.from('order_items').insert(orderItems);
+            await getSupabase().from('order_items').insert(orderItems);
 
             // Update stock quantities
             for (const item of items || []) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const product = Array.isArray((item as any).product) ? (item as any).product[0] : (item as any).product;
                 try {
-                    await supabase.rpc('decrement_stock', {
+                    await getSupabase().rpc('decrement_stock', {
                         product_id: product?.id,
                         qty: (item as { quantity: number }).quantity
                     });
@@ -251,7 +251,7 @@ export async function PUT(request: NextRequest) {
                 .eq('id', transferId);
 
             // Clear cart
-            await supabase.from('cart_items').delete().eq('cart_id', transfer.cart_id);
+            await getSupabase().from('cart_items').delete().eq('cart_id', transfer.cart_id);
 
             return NextResponse.json({
                 success: true,
@@ -276,3 +276,4 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to process' }, { status: 500 });
     }
 }
+

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
+const getSupabase = () => createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
 
-    const { data: staff } = await supabase
+    const { data: staff } = await getSupabase()
       .from('staff')
       .select('*')
       .eq('user_id', userId)
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if already exists
-    const { data: existing } = await supabase
+    const { data: existing } = await getSupabase()
       .from('staff')
       .select('id')
       .eq('user_id', userId)
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User is already staff' }, { status: 400 });
     }
 
-    const { data: staff, error } = await supabase
+    const { data: staff, error } = await getSupabase()
       .from('staff')
       .insert({ user_id: userId, name, role })
       .select()
@@ -85,7 +85,7 @@ export async function PUT(request: NextRequest) {
     if (role) updates.role = role;
     if (name) updates.name = name;
 
-    const { data: staff, error } = await supabase
+    const { data: staff, error } = await getSupabase()
       .from('staff')
       .update(updates)
       .eq('id', staffId)
