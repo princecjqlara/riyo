@@ -36,6 +36,12 @@ type CartItemRow = {
     product: ProductRow | null;
 };
 
+const isCartItemRow = (value: unknown): value is CartItemRow => {
+    if (!value || typeof value !== 'object') return false;
+    const row = value as Partial<CartItemRow>;
+    return typeof row.id === 'string' && typeof row.quantity === 'number';
+};
+
 // Get or create cart
 async function getOrCreateCart(
     supabase: ReturnType<typeof getSupabase>,
@@ -154,13 +160,15 @@ export async function GET(request: NextRequest) {
         let total = 0;
         let totalDiscount = 0;
 
-        const enrichedItems = (items || [])
-            .filter((item: CartItemRow) => {
-                if (!item.product) return false;
+        const itemsData: CartItemRow[] = Array.isArray(items) ? (items as unknown as CartItemRow[]) : [];
+
+        const enrichedItems = itemsData
+            .filter((item) => {
+                if (!item?.product) return false;
                 if (!cart.store_id) return true;
                 return item.product.store_id === cart.store_id;
             })
-            .map((item: CartItemRow) => {
+            .map((item) => {
                 const product = item.product!;
 
                 // Find size price if size exists
