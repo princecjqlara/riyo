@@ -128,12 +128,14 @@ export async function GET(request: NextRequest) {
         let total = 0;
         let totalDiscount = 0;
 
-        const enrichedItems = (items || []).map((item: { quantity: number; unit_price: number; product: { price: number } }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const enrichedItems = (items || []).map((item: any) => {
+            const product = Array.isArray(item.product) ? item.product[0] : item.product;
             const subtotal = item.unit_price * item.quantity;
-            const discount = (item.product.price - item.unit_price) * item.quantity;
+            const discount = product ? (product.price - item.unit_price) * item.quantity : 0;
             total += subtotal;
             totalDiscount += discount;
-            return { ...item, subtotal, discount };
+            return { ...item, product, subtotal, discount };
         });
 
         return NextResponse.json({
@@ -190,9 +192,11 @@ export async function PUT(request: NextRequest) {
             // Calculate total
             let total = 0;
             let totalDiscount = 0;
-            (items || []).forEach((item: { quantity: number; unit_price: number; product: { price: number } }) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (items || []).forEach((item: any) => {
+                const product = Array.isArray(item.product) ? item.product[0] : item.product;
                 total += item.unit_price * item.quantity;
-                totalDiscount += (item.product.price - item.unit_price) * item.quantity;
+                totalDiscount += product ? (product.price - item.unit_price) * item.quantity : 0;
             });
 
             // Create order
@@ -210,28 +214,34 @@ export async function PUT(request: NextRequest) {
                 .single();
 
             // Create order items
-            const orderItems = (items || []).map((item: { quantity: number; unit_price: number; is_wholesale: boolean; tier_label: string; product: { id: string; name: string } }) => ({
-                order_id: order.id,
-                product_id: item.product.id,
-                product_name: item.product.name,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                is_wholesale: item.is_wholesale,
-                tier_label: item.tier_label
-            }));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const orderItems = (items || []).map((item: any) => {
+                const product = Array.isArray(item.product) ? item.product[0] : item.product;
+                return {
+                    order_id: order.id,
+                    product_id: product?.id,
+                    product_name: product?.name,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    is_wholesale: item.is_wholesale,
+                    tier_label: item.tier_label
+                };
+            });
 
             await supabase.from('order_items').insert(orderItems);
 
             // Update stock quantities
             for (const item of items || []) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const product = Array.isArray((item as any).product) ? (item as any).product[0] : (item as any).product;
                 await supabase.rpc('decrement_stock', {
-                    product_id: (item as { product: { id: string } }).product.id,
+                    product_id: product?.id,
                     qty: (item as { quantity: number }).quantity
                 }).catch(() => {
                     // Fallback if RPC doesn't exist
                     supabase.from('items')
                         .update({ quantity: supabase.rpc('greatest', { a: 0, b: `quantity - ${(item as { quantity: number }).quantity}` }) })
-                        .eq('id', (item as { product: { id: string } }).product.id);
+                        .eq('id', product?.id);
                 });
             }
 
