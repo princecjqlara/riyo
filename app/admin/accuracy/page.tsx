@@ -2,6 +2,9 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Navbar from '@/components/shared/Navbar';
 import Link from 'next/link';
 
+// Avoid static prerendering so missing Supabase env vars don't break builds
+export const dynamic = 'force-dynamic';
+
 export default function AccuracyDashboard() {
   return (
     <ProtectedRoute requiredRole="admin">
