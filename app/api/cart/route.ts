@@ -196,7 +196,8 @@ export async function POST(request: NextRequest) {
         }
 
         const newQuantity = existingItem ? existingItem.quantity + quantity : quantity;
-        const pricing = getBestPrice(product.price, product.wholesale_tiers || [], newQuantity, sizePrice);
+        const basePrice = Number(product.price ?? 0) || 0;
+        const pricing = getBestPrice(basePrice, product.wholesale_tiers || [], newQuantity, sizePrice);
 
         if (existingItem) {
             // Update quantity
@@ -238,7 +239,7 @@ export async function POST(request: NextRequest) {
 
                     if (fallbackExisting) {
                         const mergedQty = fallbackExisting.quantity + quantity;
-                        const mergedPricing = getBestPrice(product.price, product.wholesale_tiers || [], mergedQty, sizePrice);
+                        const mergedPricing = getBestPrice(basePrice, product.wholesale_tiers || [], mergedQty, sizePrice);
                         const { error: mergeError } = await supabase
                             .from('cart_items')
                             .update({
@@ -269,7 +270,7 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
         console.error('Add to cart error:', error);
-        return NextResponse.json({ error: 'Failed to add item' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to add item', detail: (error as Error)?.message || String(error) }, { status: 500 });
     }
 }
 

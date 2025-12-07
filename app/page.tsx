@@ -189,7 +189,8 @@ export default function ShopPage() {
         body: JSON.stringify({ sessionId: sid, productId, quantity: qty, size })
       });
       if (!res.ok) {
-        console.error('Add to cart failed', await res.text());
+        const errorText = await res.text();
+        console.error('Add to cart failed', errorText);
         return;
       }
       await fetchCart(sid);
