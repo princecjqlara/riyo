@@ -20,6 +20,10 @@ interface ProductAnalysis {
  * Enhanced product analysis with detailed specs and auto-categorization
  */
 export async function analyzeProductImage(imageBase64: string): Promise<ProductAnalysis> {
+    if (!NVIDIA_API_KEY) {
+        throw new Error('Vision API not configured: set NVIDIA_API_KEY in env.');
+    }
+
     let cleanBase64 = imageBase64;
     let mimeType = 'image/jpeg';
 
@@ -43,7 +47,7 @@ export async function analyzeProductImage(imageBase64: string): Promise<ProductA
                 content: [
                     {
                         type: 'text',
-                        text: `You are an expert product analyst. Analyze this product image with maximum detail.
+                        text: `You are an expert product analyst. Analyze this product image with maximum detail and completeness.
 
 EXTRACT ALL VISIBLE INFORMATION:
 
@@ -57,8 +61,12 @@ EXTRACT ALL VISIBLE INFORMATION:
 8. WEIGHT: If visible or estimable
 9. MODEL NUMBER: Any model/SKU numbers visible
 10. CONDITION: New, used, sealed, packaging visible?
-11. SPECIAL FEATURES: Unique selling points, tech specs
-12. PRICE ESTIMATE: Estimated retail price in Philippine Peso (₱)
+11. SPECIAL FEATURES: Unique selling points, tech specs, functions, compatibility, included accessories
+12. CONTENTS/PACKAGING: What is included in the box/bundle, packaging type
+13. TARGET USER / USE-CASES: Who it's for (kids/adults/pro use) and primary use (e.g., cooking rice, gaming)
+14. SAFETY / WARNINGS / EXPIRY: Any caution text, expiry/best-before if visible
+15. ORIGIN/MADE IN: If visible
+16. PRICE ESTIMATE: Estimated retail price in Philippine Peso (₱)
 
 RESPOND IN THIS EXACT FORMAT:
 PRODUCT: [exact product name]
@@ -71,10 +79,10 @@ MATERIAL: [material]
 WEIGHT: [weight if known]
 MODEL: [model number or N/A]
 CONDITION: [new/used/sealed]
-FEATURES: [comma-separated key features]
+FEATURES: [comma-separated key features, include functions, accessories, packaging details]
 PRICE_ESTIMATE: [number only, e.g., 500]
-DESCRIPTION: [detailed 3-4 sentence description]
-SPECS: [key=value pairs separated by semicolons, e.g., Screen=6.5 inches; Battery=5000mAh; RAM=8GB]
+DESCRIPTION: [detailed 4-6 sentence description including use-cases, audience, packaging/contents, warnings if any]
+SPECS: [key=value pairs separated by semicolons, e.g., Screen=6.5 inches; Battery=5000mAh; RAM=8GB; Origin=Philippines; Expiry=Dec 2025]
 
 Be thorough and accurate. Report only what you can see or reasonably infer.`
                     },
@@ -87,7 +95,7 @@ Be thorough and accurate. Report only what you can see or reasonably infer.`
                 ]
             }
         ],
-        max_tokens: 1000,
+        max_tokens: 1500,
         temperature: 0.1,
         stream: false
     };

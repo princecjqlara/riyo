@@ -200,18 +200,20 @@ export async function POST(request: NextRequest) {
 
         if (existingItem) {
             // Update quantity
-            await supabase
+            const { error: updateError } = await supabase
                 .from('cart_items')
                 .update({
                     quantity: newQuantity,
                     unit_price: pricing.price,
                     is_wholesale: pricing.isWholesale,
-                    tier_label: pricing.tierLabel
+                    tier_label: pricing.tierLabel,
+                    size: size || null
                 })
                 .eq('id', existingItem.id);
+            if (updateError) throw updateError;
         } else {
             // Insert new item
-            await supabase
+            const { error: insertError } = await supabase
                 .from('cart_items')
                 .insert({
                     cart_id: cart.id,
@@ -222,6 +224,39 @@ export async function POST(request: NextRequest) {
                     tier_label: pricing.tierLabel,
                     size: size || null
                 });
+
+            // If unique constraint (cart_id, product_id) blocks size variants, merge into existing row
+            if (insertError) {
+                const pgCode = (insertError as { code?: string }).code;
+                if (pgCode === '23505') {
+                    const { data: fallbackExisting } = await supabase
+                        .from('cart_items')
+                        .select('*')
+                        .eq('cart_id', cart.id)
+                        .eq('product_id', productId)
+                        .single();
+
+                    if (fallbackExisting) {
+                        const mergedQty = fallbackExisting.quantity + quantity;
+                        const mergedPricing = getBestPrice(product.price, product.wholesale_tiers || [], mergedQty, sizePrice);
+                        const { error: mergeError } = await supabase
+                            .from('cart_items')
+                            .update({
+                                quantity: mergedQty,
+                                unit_price: mergedPricing.price,
+                                is_wholesale: mergedPricing.isWholesale,
+                                tier_label: mergedPricing.tierLabel,
+                                size: size || fallbackExisting.size || null
+                            })
+                            .eq('id', fallbackExisting.id);
+                        if (mergeError) throw mergeError;
+                    } else {
+                        throw insertError;
+                    }
+                } else {
+                    throw insertError;
+                }
+            }
         }
 
         return NextResponse.json({

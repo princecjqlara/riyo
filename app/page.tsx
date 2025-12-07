@@ -8,7 +8,7 @@ interface Category { id: string; name: string; parent_id: string | null; childre
 interface ProductSize { size: string; price: number; stock: number; }
 interface Product {
   id: string; name: string; price: number; brand: string | null; category_id: string | null;
-  image_url: string | null; additional_images: string[] | null; quantity: number;
+  image_url: string | null; additional_images: string[] | null; quantity: number | null;
   wholesale_tiers: WholesaleTier[] | null;
   product_code: string | null;
   sizes: ProductSize[] | null;
@@ -182,15 +182,21 @@ export default function ShopPage() {
   const addToCart = async (productId: string, qty: number, size?: string | null) => {
     const sid = ensureSessionId();
     if (!sid) return;
-    const res = await fetch('/api/cart', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: sid, productId, quantity: qty, size })
-    });
-    if (!res.ok) {
-      console.error('Add to cart failed', await res.text());
+    try {
+      const res = await fetch('/api/cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sid, productId, quantity: qty, size })
+      });
+      if (!res.ok) {
+        console.error('Add to cart failed', await res.text());
+        return;
+      }
+      await fetchCart(sid);
+    } catch (error) {
+      console.error('Add to cart error:', error);
+      return;
     }
-    await fetchCart(sid);
     setSelectedProduct(null);
     setAddQty(1);
     setSelectedSize(null);
@@ -456,7 +462,9 @@ export default function ShopPage() {
                       <p className="text-gray-400 text-xs truncate mb-2">{cleanLabel(p.brand) || 'Generic'}</p>
                       <div className="flex justify-between items-end">
                         <span className="text-orange-500 font-black text-lg">₱{p.price.toFixed(0)}</span>
-                        {p.quantity < 5 && <span className="text-[10px] text-red-500 font-medium bg-red-50 px-2 py-0.5 rounded-full">{p.quantity} left</span>}
+                        {typeof p.quantity === 'number' && p.quantity < 5 && p.quantity >= 0 && (
+                          <span className="text-[10px] text-red-500 font-medium bg-red-50 px-2 py-0.5 rounded-full">{p.quantity} left</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -567,10 +575,12 @@ export default function ShopPage() {
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-orange-500 text-xs font-bold tracking-wider uppercase">{cleanLabel(selectedProduct.brand) || 'No Brand'}</span>
-                  {selectedProduct.quantity > 0 ? (
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">✓ In Stock</span>
-                  ) : (
-                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">Out of Stock</span>
+                  {typeof selectedProduct.quantity === 'number' && (
+                    selectedProduct.quantity > 0 ? (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">✓ In Stock</span>
+                    ) : (
+                      <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">Out of Stock</span>
+                    )
                   )}
                 </div>
                 <h2 className="text-3xl font-black leading-tight mb-3 text-gray-900">{cleanLabel(selectedProduct.name)}</h2>
@@ -580,7 +590,7 @@ export default function ShopPage() {
                   <div className="text-xs bg-gray-100 px-3 py-1.5 rounded-full text-gray-500 font-medium flex items-center gap-1">
                     <span className="opacity-60">SKU:</span> {selectedProduct.product_code || selectedProduct.id.slice(0, 6).toUpperCase()}
                   </div>
-                  {selectedProduct.quantity > 0 && selectedProduct.quantity < 10 && (
+                  {typeof selectedProduct.quantity === 'number' && selectedProduct.quantity > 0 && selectedProduct.quantity < 10 && (
                     <div className="text-xs bg-orange-50 text-orange-600 px-3 py-1.5 rounded-full font-bold">
                       Only {selectedProduct.quantity} left!
                     </div>

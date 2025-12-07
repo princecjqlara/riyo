@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
 interface CartItem {
-  id: string; quantity: number; unit_price: number; is_wholesale: boolean; tier_label: string | null;
+  id: string; quantity: number | null; unit_price: number; is_wholesale: boolean; tier_label: string | null;
   subtotal: number; discount: number;
   product: { id: string; name: string; price: number; brand: string | null; image_url: string | null; };
 }
@@ -203,7 +203,7 @@ export default function StaffDashboard() {
                   <div className="flex-1">
                     <h4 className="text-white">{item.product.name}</h4>
                     <p className="text-gray-400 text-sm">
-                      ₱{item.unit_price.toFixed(2)} × {item.quantity}
+                      ₱{item.unit_price.toFixed(2)} × {item.quantity ?? 0}
                       {item.is_wholesale && <span className="ml-2 text-yellow-400">({item.tier_label})</span>}
                     </p>
                   </div>

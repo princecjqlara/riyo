@@ -22,7 +22,7 @@ interface Product {
   image_url: string | null;
   additional_images: string[] | null;
   distinguishing_features: string[] | null;
-  quantity: number;
+  quantity: number | null;
   scan_count: number;
   product_code: string | null;
   sizes: { size: string; price: number; stock: number }[] | null;
@@ -53,7 +53,7 @@ export default function AdminDashboard() {
   const [brand, setBrand] = useState('');
   const [description, setDescription] = useState('');
   const [features, setFeatures] = useState('');
-  const [quantity, setQuantity] = useState('0');
+  const [quantity, setQuantity] = useState('');
   const [productCode, setProductCode] = useState('');
   const [wholesaleTiers, setWholesaleTiers] = useState<{ min_qty: number; price: number; label: string }[]>([]);
   const [sizes, setSizes] = useState<{ size: string; price: number; stock: number }[]>([]);
@@ -194,6 +194,7 @@ export default function AdminDashboard() {
     try {
       const featuresArray = features.split(',').map(f => f.trim()).filter(Boolean);
       const specsObj = specs.reduce((acc, { key, value }) => ({ ...acc, [key]: value }), {});
+      const quantityValue = quantity.trim() === '' ? null : (parseInt(quantity) || 0);
 
       const productData = {
         name: name || 'Unknown',
@@ -204,7 +205,7 @@ export default function AdminDashboard() {
         image_url: mainImage,
         additional_images: additionalImages.length ? additionalImages : null,
         distinguishing_features: featuresArray.length ? featuresArray : null,
-        quantity: parseInt(quantity) || 0,
+        quantity: quantityValue,
         wholesale_tiers: wholesaleTiers.length ? wholesaleTiers : [],
         product_code: productCode || null,
         sizes: sizes.length ? sizes : [],
@@ -233,7 +234,7 @@ export default function AdminDashboard() {
 
   const resetProductForm = () => {
     setEditingProductId(null);
-    setName(''); setPrice(''); setBrand(''); setDescription(''); setFeatures(''); setQuantity('0');
+    setName(''); setPrice(''); setBrand(''); setDescription(''); setFeatures(''); setQuantity('');
     setProductCategoryId(''); setMainImage(null); setAdditionalImages([]); setWholesaleTiers([]);
     setProductCode(''); setSizes([]); setSpecs([]);
   };
@@ -245,7 +246,7 @@ export default function AdminDashboard() {
     setBrand(product.brand || '');
     setDescription(product.description || '');
     setFeatures(product.distinguishing_features?.join(', ') || '');
-    setQuantity(product.quantity?.toString() || '0');
+    setQuantity(product.quantity !== null && product.quantity !== undefined ? product.quantity.toString() : '');
     setProductCategoryId(product.category_id || '');
     setMainImage(product.image_url || null);
     setAdditionalImages(product.additional_images || []);
@@ -542,7 +543,7 @@ export default function AdminDashboard() {
                           {categories.map(c => <option key={c.id} value={c.id}>{c.parent_id ? '  └ ' : ''}{c.name}</option>)}
                         </select>
 
-                        <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="Stock Qty"
+                        <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="Stock Qty (optional)"
                           className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black/5 transition-all" />
                       </div>
 
@@ -625,7 +626,9 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <h4 className="font-bold text-gray-900 truncate mb-1">{p.name}</h4>
-                      <p className="text-gray-400 text-xs mb-3">{p.brand || 'No Brand'} • {p.quantity} in stock</p>
+                      <p className="text-gray-400 text-xs mb-3">
+                        {p.brand || 'No Brand'}{typeof p.quantity === 'number' ? ` • ${p.quantity} in stock` : ''}
+                      </p>
                       <div className="flex justify-between items-center">
                         <span className="text-xl font-black text-gray-900">₱{p.price.toFixed(2)}</span>
                         <button onClick={() => { setTrainingProduct(p); trainingFileRef.current?.click(); }}
@@ -741,7 +744,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="bg-white rounded-3xl p-6 shadow-xl shadow-gray-100 border border-gray-100 text-center">
                   <div className="text-4xl mb-2">💰</div>
-                  <div className="text-3xl font-black text-gray-900">₱{products.reduce((sum, p) => sum + (p.price * p.quantity), 0).toLocaleString()}</div>
+                  <div className="text-3xl font-black text-gray-900">₱{products.reduce((sum, p) => sum + (p.price * (p.quantity || 0)), 0).toLocaleString()}</div>
                   <div className="text-gray-400 text-sm font-medium">Inventory Value</div>
                 </div>
               </div>

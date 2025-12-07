@@ -170,7 +170,7 @@ export default function OrganizerDashboard() {
         <main className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8 space-y-8">
           <div>
             <h1 className="text-3xl font-extrabold text-gray-900">Organizer Console</h1>
-            <p className="mt-2 text-gray-600">Create stores and invite admins by email.</p>
+            <p className="mt-2 text-gray-600">Create stores, rename them, and invite admins by email.</p>
           </div>
 
           {message && (
