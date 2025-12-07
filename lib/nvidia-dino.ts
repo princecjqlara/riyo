@@ -334,3 +334,30 @@ export async function searchByImage(imageBase64: string, products: Array<{
         confidence: result?.score || 0
     };
 }
+
+/**
+ * Search with NVIDIA Grounding DINO for object detection
+ * This is a placeholder/stub implementation
+ * Full implementation requires NVIDIA API configuration
+ */
+export async function searchWithDino(
+    imageBuffer: Buffer,
+    prompt?: string
+): Promise<{
+    detections: Array<{
+        label: string;
+        score: number;
+        bbox: [number, number, number, number];
+    }>;
+    processingTime: number;
+}> {
+    // Stub implementation - returns empty detections
+    // TODO: Implement full NVIDIA Grounding DINO integration
+    // Requires NVIDIA API key and proper setup
+    console.warn('NVIDIA Grounding DINO not fully configured. Returning empty detections.');
+    
+    return {
+        detections: [],
+        processingTime: 0
+    };
+}
