@@ -62,13 +62,21 @@ export default function ShopPage() {
   const [transferCode, setTransferCode] = useState<string | null>(null);
   const [transferExpires, setTransferExpires] = useState<string | null>(null);
 
-  useEffect(() => {
+  const ensureSessionId = () => {
+    if (sessionId) return sessionId;
+    if (typeof window === 'undefined') return '';
     let sid = localStorage.getItem('shop_session');
     if (!sid) {
       sid = 'sess_' + Math.random().toString(36).substring(2, 15);
       localStorage.setItem('shop_session', sid);
     }
     setSessionId(sid);
+    return sid;
+  };
+
+  useEffect(() => {
+    const sid = ensureSessionId();
+    if (!sid) return;
     fetchData();
     fetchCart(sid);
     fetchBranding();
@@ -143,8 +151,10 @@ export default function ShopPage() {
     setLoading(false);
   };
 
-  const fetchCart = async (sid: string) => {
-    const res = await fetch(`/api/cart?session=${sid}`);
+  const fetchCart = async (sid?: string) => {
+    const session = sid || ensureSessionId();
+    if (!session) return;
+    const res = await fetch(`/api/cart?session=${session}`);
     const data = await res.json();
     setCartId(data.cart_id);
     setCartItems(data.items || []);
@@ -168,12 +178,17 @@ export default function ShopPage() {
   };
 
   const addToCart = async (productId: string, qty: number, size?: string | null) => {
-    await fetch('/api/cart', {
+    const sid = ensureSessionId();
+    if (!sid) return;
+    const res = await fetch('/api/cart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, productId, quantity: qty, size })
+      body: JSON.stringify({ sessionId: sid, productId, quantity: qty, size })
     });
-    fetchCart(sessionId);
+    if (!res.ok) {
+      console.error('Add to cart failed', await res.text());
+    }
+    await fetchCart(sid);
     setSelectedProduct(null);
     setAddQty(1);
     setSelectedSize(null);
@@ -181,17 +196,20 @@ export default function ShopPage() {
   };
 
   const updateCartItem = async (itemId: string, qty: number) => {
+    const sid = ensureSessionId();
+    if (!sid) return;
     await fetch('/api/cart', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, itemId, quantity: qty })
+      body: JSON.stringify({ sessionId: sid, itemId, quantity: qty })
     });
-    fetchCart(sessionId);
+    fetchCart(sid);
   };
 
   const removeCartItem = async (itemId: string) => {
+    const sid = ensureSessionId();
     await fetch(`/api/cart?itemId=${itemId}`, { method: 'DELETE' });
-    fetchCart(sessionId);
+    fetchCart(sid);
   };
 
   const generateTransferCode = async () => {
@@ -257,14 +275,30 @@ export default function ShopPage() {
     : products;
 
   const getPriceDisplay = (product: Product, qty: number) => {
+    const basePrice = Number((product as Product).price ?? 0);
     const tiers = product.wholesale_tiers || [];
     const sorted = [...tiers].sort((a, b) => b.min_qty - a.min_qty);
     for (const tier of sorted) {
+      const tierPrice = Number((tier as WholesaleTier).price ?? basePrice);
       if (qty >= tier.min_qty) {
-        return { price: tier.price, isWholesale: true, label: tier.label, discount: product.price - tier.price };
+        return { price: tierPrice, isWholesale: true, label: tier.label, discount: basePrice - tierPrice };
       }
     }
-    return { price: product.price, isWholesale: false, label: null, discount: 0 };
+    return { price: basePrice, isWholesale: false, label: null, discount: 0 };
+  };
+
+  const getSelectedUnitPrice = () => {
+    if (!selectedProduct) return 0;
+    const sizePrice = selectedSize
+      ? selectedProduct.sizes?.find(s => s.size === selectedSize)?.price
+      : null;
+
+    if (sizePrice !== undefined && sizePrice !== null) {
+      return Number(sizePrice) || 0;
+    }
+
+    const fallbackPrice = getPriceDisplay(selectedProduct, addQty).price ?? selectedProduct.price ?? 0;
+    return Number(fallbackPrice) || 0;
   };
 
   const cartItemCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
@@ -633,7 +667,7 @@ export default function ShopPage() {
                   <div className="text-right">
                     <p className="text-xs text-gray-400 mb-1 font-medium">Total Price</p>
                     <p className="text-2xl font-black text-gray-900">
-                      ₱{((selectedSize ? (selectedProduct.sizes?.find(s => s.size === selectedSize)?.price || 0) : getPriceDisplay(selectedProduct, addQty).price) * addQty).toFixed(2)}
+                      ₱{(getSelectedUnitPrice() * addQty).toFixed(2)}
                     </p>
                   </div>
                 </div>
