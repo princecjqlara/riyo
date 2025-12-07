@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -38,7 +38,17 @@ interface StoreRow {
   created_at?: string;
 }
 
-type TabType = 'products' | 'categories' | 'search' | 'analytics' | 'bulk' | 'stores';
+interface StaffMember {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: string | null;
+  store_id: string | null;
+  store_name: string | null;
+  created_at: string;
+}
+
+type TabType = 'products' | 'categories' | 'search' | 'analytics' | 'bulk' | 'users' | 'stores';
 
 // Pastel colors for cards
 const pastelColors = [
@@ -64,6 +74,14 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('products');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [selectedStaffStoreId, setSelectedStaffStoreId] = useState<string>('');
+  const [staffCode, setStaffCode] = useState('');
+  const [staffCodeExpiresAt, setStaffCodeExpiresAt] = useState<number | null>(null);
+  const [staffCodeStatus, setStaffCodeStatus] = useState<string | null>(null);
+  const [staffCodeCountdown, setStaffCodeCountdown] = useState('');
+  const [staffCodeLoading, setStaffCodeLoading] = useState(false);
   const router = useRouter();
 
   // Product form
@@ -132,6 +150,23 @@ export default function AdminDashboard() {
     loadStoreData(currentStoreId);
   }, [currentStoreId]);
 
+  useEffect(() => {
+    if (!stores.length) return;
+    if (!selectedStaffStoreId && (currentStoreId || stores[0]?.id)) {
+      setSelectedStaffStoreId(currentStoreId || stores[0].id);
+    }
+  }, [stores, currentStoreId, selectedStaffStoreId]);
+
+  useEffect(() => {
+    if (activeTab !== 'users') return;
+    if (!staff.length && !staffLoading) {
+      fetchStaff();
+    }
+    if (selectedStaffStoreId) {
+      fetchStaffJoinCode(selectedStaffStoreId, true);
+    }
+  }, [activeTab, selectedStaffStoreId]);
+
   const checkAuth = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/login'); return; }
@@ -193,6 +228,129 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchStaff = async () => {
+    setStaffLoading(true);
+    try {
+      const res = await fetch('/api/staff');
+      if (res.ok) {
+        const data = await res.json();
+        setStaff(data.staff || []);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setMessage(body.error || 'Failed to load users');
+      }
+    } catch (error) {
+      console.error('Failed to load staff', error);
+      setMessage('Could not load users.');
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  const fetchStaffJoinCode = async (storeId: string, autoCreate = false) => {
+    setStaffCodeLoading(true);
+    try {
+      const res = await fetch(`/api/stores/join-code?storeId=${storeId}&role=staff`);
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error || 'Failed to load join code');
+      }
+      if (!body.code && autoCreate) {
+        await renewStaffCode(storeId);
+        return;
+      }
+      setStaffCode(body.code || '');
+      setStaffCodeExpiresAt(body.expiresAt ? new Date(body.expiresAt).getTime() : null);
+      setStaffCodeStatus(body.status || null);
+    } catch (error) {
+      console.error('Join code error', error);
+      setMessage(error instanceof Error ? error.message : 'Failed to load join code');
+    } finally {
+      setStaffCodeLoading(false);
+    }
+  };
+
+  const renewStaffCode = async (storeId?: string) => {
+    const targetStoreId = storeId || selectedStaffStoreId;
+    if (!targetStoreId) return;
+    setStaffCodeLoading(true);
+    try {
+      const res = await fetch('/api/stores/join-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId: targetStoreId, role: 'staff' }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error || 'Failed to create code');
+      }
+      setStaffCode(body.code);
+      setStaffCodeExpiresAt(body.expiresAt ? new Date(body.expiresAt).getTime() : null);
+      setStaffCodeStatus(body.status);
+    } catch (error) {
+      console.error('Renew code error', error);
+      setMessage(error instanceof Error ? error.message : 'Failed to create join code');
+    } finally {
+      setStaffCodeLoading(false);
+    }
+  };
+
+  const updateStaffRole = async (staffId: string, role: string) => {
+    try {
+      const res = await fetch('/api/staff', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId, role }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error || 'Failed to update user');
+      }
+      setStaff(prev => prev.map(m => m.id === staffId ? { ...m, ...body.staff } : m));
+      setMessage('User updated.');
+    } catch (error) {
+      console.error('Update staff error', error);
+      setMessage(error instanceof Error ? error.message : 'Failed to update user');
+    }
+  };
+
+  const removeStaffMember = async (staffId: string) => {
+    if (!confirm('Remove this user from the store?')) return;
+    try {
+      const res = await fetch('/api/staff', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error || 'Failed to remove user');
+      }
+      setStaff(prev => prev.filter(m => m.id !== staffId));
+      setMessage('User removed.');
+    } catch (error) {
+      console.error('Delete staff error', error);
+      setMessage(error instanceof Error ? error.message : 'Failed to remove user');
+    }
+  };
+
+  useEffect(() => {
+    if (!staffCodeExpiresAt) {
+      setStaffCodeCountdown('');
+      return;
+    }
+    const updateCountdown = () => {
+      const seconds = Math.max(0, Math.floor((staffCodeExpiresAt - Date.now()) / 1000));
+      const minutes = Math.floor(seconds / 60);
+      const remainder = seconds % 60;
+      setStaffCodeCountdown(`${minutes}m ${remainder.toString().padStart(2, '0')}s`);
+      if (seconds === 0) setStaffCodeStatus('expired');
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [staffCodeExpiresAt]);
+
   const saveStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeEditId || !storeEditName.trim()) {
@@ -248,7 +406,7 @@ export default function AdminDashboard() {
       const resized = await resizeImage(reader.result as string);
       setMainImage(resized);
       setAnalyzing(true);
-      setMessage('🤖 Analyzing...');
+      setMessage('ðŸ¤– Analyzing...');
       try {
         const res = await fetch('/api/analyze-product', {
           method: 'POST',
@@ -277,9 +435,9 @@ export default function AdminDashboard() {
             const code = `${data.analysis.brand.slice(0, 3).toUpperCase()}-${Date.now().toString(36).slice(-5).toUpperCase()}`;
             setProductCode(code);
           }
-          setMessage('✅ AI filled: Name, Brand, Price, Size, Specs!');
+          setMessage('âœ… AI filled: Name, Brand, Price, Size, Specs!');
         }
-      } catch { setMessage('⚠️ AI failed'); }
+      } catch { setMessage('âš ï¸ AI failed'); }
       finally { setAnalyzing(false); }
     };
     reader.readAsDataURL(file);
@@ -434,7 +592,7 @@ export default function AdminDashboard() {
       setNewCategoryName('');
       setParentCategoryId('');
       if (currentStoreId) fetchCategories(currentStoreId);
-      setMessage('✅ Category created!');
+      setMessage('âœ… Category created!');
     }
   };
 
@@ -472,7 +630,7 @@ export default function AdminDashboard() {
         const data = await res.json();
         if (data.product) {
           setSearchResults([data.product]);
-          setMessage('✅ Found: ' + data.product.name);
+          setMessage('âœ… Found: ' + data.product.name);
         } else if (data.similarProducts?.length) {
           setSearchResults(data.similarProducts);
           setMessage('Found similar products');
@@ -501,7 +659,7 @@ export default function AdminDashboard() {
         .eq('id', trainingProduct.id);
       if (!error) {
         setProducts(products.map(p => p.id === trainingProduct.id ? { ...p, additional_images: updated } : p));
-        setMessage(`✅ Training photo added! (${updated.length} total)`);
+        setMessage(`âœ… Training photo added! (${updated.length} total)`);
         setTrainingProduct(null);
       }
     };
@@ -512,6 +670,9 @@ export default function AdminDashboard() {
   const filteredProducts = selectedCategory
     ? products.filter(p => p.category_id === selectedCategory)
     : products;
+  const staffForStore = selectedStaffStoreId
+    ? staff.filter(member => member.store_id === selectedStaffStoreId)
+    : staff;
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
@@ -535,7 +696,7 @@ export default function AdminDashboard() {
           <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-[#3478F6] to-[#7C3AED] rounded-xl flex items-center justify-center">
-                <span className="text-white text-lg">📦</span>
+                <span className="text-white text-lg">ðŸ“¦</span>
               </div>
               <div>
                 <h1 className="text-xl font-black text-slate-900">Admin<span className="font-normal text-slate-400">Panel</span></h1>
@@ -584,26 +745,28 @@ export default function AdminDashboard() {
           </div>
           {/* Tabs */}
           <div className="flex gap-2 mb-8 overflow-x-auto pb-2 no-scrollbar">
-            {(['products', 'categories', 'bulk', 'search', 'analytics', 'stores'] as TabType[]).map(tab => (
+            {(['products', 'categories', 'bulk', 'search', 'analytics', 'users', 'stores'] as TabType[]).map(tab => (
               <button key={tab} onClick={() => { setActiveTab(tab); setSearchResults([]); }}
                 className={`px-5 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === tab ? 'bg-[#3478F6] text-white shadow-lg shadow-blue-500/25' : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50 hover:text-slate-900'}`}>
                 {tab === 'products'
-                  ? '📦 Products'
+                  ? 'ðŸ“¦ Products'
                   : tab === 'categories'
-                    ? '📁 Categories'
+                    ? 'ðŸ“ Categories'
                     : tab === 'bulk'
-                      ? '🚀 Bulk Upload'
+                      ? 'ðŸš€ Bulk Upload'
                       : tab === 'search'
-                        ? '🔍 Search'
+                        ? 'ðŸ” Search'
                         : tab === 'analytics'
-                          ? '📊 Analytics'
-                          : '🏪 Stores'}
+                          ? 'dY"S Analytics'
+                          : tab === 'users'
+                            ? '👥 Users'
+                            : 'ðŸª Stores'}
               </button>
             ))}
           </div>
 
           {message && (
-            <div className={`p-4 rounded-2xl mb-6 font-medium animate-fade-in ${message.includes('Error') ? 'bg-[#FFE4E6] text-rose-600' : message.includes('⚠️') ? 'bg-[#FEF9C3] text-amber-600' : 'bg-[#D4F5E9] text-emerald-700'}`}>
+            <div className={`p-4 rounded-2xl mb-6 font-medium animate-fade-in ${message.includes('Error') ? 'bg-[#FFE4E6] text-rose-600' : message.includes('âš ï¸') ? 'bg-[#FEF9C3] text-amber-600' : 'bg-[#D4F5E9] text-emerald-700'}`}>
               {message}
             </div>
           )}
@@ -612,20 +775,21 @@ export default function AdminDashboard() {
           {activeTab === 'bulk' && (
             <div className="bg-white rounded-3xl p-8 shadow-xl shadow-slate-100 border border-slate-100 animate-fade-in">
               <div className="text-center max-w-2xl mx-auto">
-                <div className="w-20 h-20 bg-[#E0F2FE] rounded-2xl flex items-center justify-center text-4xl mx-auto mb-6">🚀</div>
+                <div className="w-20 h-20 bg-[#E0F2FE] rounded-2xl flex items-center justify-center text-4xl mx-auto mb-6">ðŸš€</div>
                 <h2 className="text-3xl font-black text-slate-900 mb-2">Bulk Product Upload</h2>
                 <p className="text-slate-400 mb-8 text-lg">Upload multiple photos. Our AI will automatically detect details, categorize items, and create products for you.</p>
               </div>
 
               <div className="border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center hover:border-[#3478F6] hover:bg-blue-50/30 transition-all cursor-pointer group"
                 onClick={() => document.getElementById('bulk-file')?.click()}>
-                <div className="text-6xl mb-6 group-hover:scale-110 transition-transform duration-300">📸</div>
+                <div className="text-6xl mb-6 group-hover:scale-110 transition-transform duration-300">ðŸ“¸</div>
                 <h3 className="text-slate-900 font-bold text-xl mb-2">Drop photos here</h3>
                 <p className="text-slate-400 font-medium">or click to browse (Max 20)</p>
                 <input id="bulk-file" type="file" multiple accept="image/*" className="hidden"
                   onChange={async (e) => {
                     const files = e.target.files;
                     if (!files?.length) return;
+                    if (!currentStoreId) { setMessage('Choose a store first.'); return; }
                     setMessage(`Analyzing ${files.length} images... This may take a while.`);
                     setAnalyzing(true);
 
@@ -643,10 +807,10 @@ export default function AdminDashboard() {
                       const res = await fetch('/api/bulk-upload', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ images, autoSave: true })
+                        body: JSON.stringify({ images, autoSave: true, storeId: currentStoreId })
                       });
                       const data = await res.json();
-                      setMessage(`✅ Processed: ${data.successful} success, ${data.failed} failed`);
+                      setMessage(`âœ… Processed: ${data.successful} success, ${data.failed} failed`);
                       if (data.successful > 0) fetchData();
                     } catch (err) { setMessage('Bulk upload failed'); }
                     finally { setAnalyzing(false); }
@@ -697,8 +861,8 @@ export default function AdminDashboard() {
                   <div className="bg-white rounded-3xl p-8 mb-8 shadow-2xl shadow-gray-200/50 border border-gray-100 animate-slide-down relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-400 to-pink-500" />
                     <div className="flex justify-between mb-8">
-                      <h3 className="text-xl font-bold text-gray-900">{editingProductId ? '✏️ Edit Product' : '➕ Add New Product'}</h3>
-                      <button onClick={() => { setShowProductForm(false); resetProductForm(); }} className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 hover:bg-gray-100 flex items-center justify-center transition-colors">✕</button>
+                      <h3 className="text-xl font-bold text-gray-900">{editingProductId ? 'âœï¸ Edit Product' : 'âž• Add New Product'}</h3>
+                      <button onClick={() => { setShowProductForm(false); resetProductForm(); }} className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 hover:bg-gray-100 flex items-center justify-center transition-colors">âœ•</button>
                     </div>
 
                     <form onSubmit={saveProduct} className="space-y-6">
@@ -723,14 +887,14 @@ export default function AdminDashboard() {
                         </div>
                       </div>
 
-                      {analyzing && <div className="p-4 bg-orange-50 text-orange-600 rounded-xl flex items-center gap-3 animate-pulse font-medium">✨ AI is analyzing your photo...</div>}
+                      {analyzing && <div className="p-4 bg-orange-50 text-orange-600 rounded-xl flex items-center gap-3 animate-pulse font-medium">âœ¨ AI is analyzing your photo...</div>}
 
                       <div className="grid grid-cols-2 gap-5">
                         <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Product Name"
                           className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 font-bold placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black/5 focus:bg-white transition-all" />
 
                         <div className="relative">
-                          <span className="absolute left-4 top-3 text-gray-400">₱</span>
+                          <span className="absolute left-4 top-3 text-gray-400">â‚±</span>
                           <input type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder="Price" required
                             className="w-full pl-8 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 font-bold placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:text-green-600 transition-all" />
                         </div>
@@ -744,7 +908,7 @@ export default function AdminDashboard() {
                         <select value={productCategoryId} onChange={e => setProductCategoryId(e.target.value)}
                           className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-black/5 transition-all">
                           <option value="">Select Category</option>
-                          {categories.map(c => <option key={c.id} value={c.id}>{c.parent_id ? '  └ ' : ''}{c.name}</option>)}
+                          {categories.map(c => <option key={c.id} value={c.id}>{c.parent_id ? '  â”” ' : ''}{c.name}</option>)}
                         </select>
 
                         <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="Stock Qty (optional)"
@@ -760,7 +924,7 @@ export default function AdminDashboard() {
                         {/* Sizes */}
                         <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
                           <div className="flex justify-between mb-4 items-center">
-                            <label className="text-gray-900 font-bold text-sm uppercase tracking-wide">📏 Sizes / Variations</label>
+                            <label className="text-gray-900 font-bold text-sm uppercase tracking-wide">ðŸ“ Sizes / Variations</label>
                             <button type="button" onClick={() => setSizes([...sizes, { size: '', price: parseFloat(price) || 0, stock: 0 }])} className="text-white bg-black px-3 py-1 rounded-lg text-xs font-bold hover:opacity-80 transition-opacity">+ Add Size</button>
                           </div>
                           {sizes.map((s, i) => (
@@ -768,7 +932,7 @@ export default function AdminDashboard() {
                               <input placeholder="Size name (e.g. XL)" value={s.size} onChange={e => { const n = [...sizes]; n[i].size = e.target.value; setSizes(n); }} className="flex-1 px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm font-bold" />
                               <input placeholder="Price" type="number" value={s.price} onChange={e => { const n = [...sizes]; n[i].price = parseFloat(e.target.value); setSizes(n); }} className="w-24 px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm" />
                               <input placeholder="Stock" type="number" value={s.stock} onChange={e => { const n = [...sizes]; n[i].stock = parseInt(e.target.value); setSizes(n); }} className="w-20 px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm" />
-                              <button type="button" onClick={() => setSizes(sizes.filter((_, idx) => idx !== i))} className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-lg hover:bg-red-100">×</button>
+                              <button type="button" onClick={() => setSizes(sizes.filter((_, idx) => idx !== i))} className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-lg hover:bg-red-100">Ã—</button>
                             </div>
                           ))}
                           {sizes.length === 0 && <p className="text-xs text-gray-400 italic">No sizes added.</p>}
@@ -777,7 +941,7 @@ export default function AdminDashboard() {
                         {/* Wholesale Tiers */}
                         <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
                           <div className="flex justify-between mb-4 items-center">
-                            <label className="text-gray-900 font-bold text-sm uppercase tracking-wide">💰 Wholesale Pricing</label>
+                            <label className="text-gray-900 font-bold text-sm uppercase tracking-wide">ðŸ’° Wholesale Pricing</label>
                             <button type="button" onClick={() => setWholesaleTiers([...wholesaleTiers, { min_qty: 10, price: parseFloat(price) || 0, label: 'Wholesale' }])} className="text-white bg-green-600 px-3 py-1 rounded-lg text-xs font-bold hover:bg-green-700 transition-colors">+ Add Tier</button>
                           </div>
                           {wholesaleTiers.map((t, i) => (
@@ -785,7 +949,7 @@ export default function AdminDashboard() {
                               <input placeholder="Min Qty" type="number" value={t.min_qty} onChange={e => { const n = [...wholesaleTiers]; n[i].min_qty = parseInt(e.target.value); setWholesaleTiers(n); }} className="w-24 px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm" />
                               <input placeholder="Price" type="number" value={t.price} onChange={e => { const n = [...wholesaleTiers]; n[i].price = parseFloat(e.target.value); setWholesaleTiers(n); }} className="w-24 px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm text-green-600 font-bold" />
                               <input placeholder="Label" value={t.label} onChange={e => { const n = [...wholesaleTiers]; n[i].label = e.target.value; setWholesaleTiers(n); }} className="flex-1 px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm" />
-                              <button type="button" onClick={() => setWholesaleTiers(wholesaleTiers.filter((_, idx) => idx !== i))} className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-lg hover:bg-red-100">×</button>
+                              <button type="button" onClick={() => setWholesaleTiers(wholesaleTiers.filter((_, idx) => idx !== i))} className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-lg hover:bg-red-100">Ã—</button>
                             </div>
                           ))}
                           {wholesaleTiers.length === 0 && <p className="text-xs text-gray-400 italic">No wholesale prices set.</p>}
@@ -794,14 +958,14 @@ export default function AdminDashboard() {
                         {/* Specs */}
                         <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
                           <div className="flex justify-between mb-4 items-center">
-                            <label className="text-gray-900 font-bold text-sm uppercase tracking-wide">📋 Specifications</label>
+                            <label className="text-gray-900 font-bold text-sm uppercase tracking-wide">ðŸ“‹ Specifications</label>
                             <button type="button" onClick={() => setSpecs([...specs, { key: '', value: '' }])} className="text-white bg-blue-600 px-3 py-1 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors">+ Add Spec</button>
                           </div>
                           {specs.map((s, i) => (
                             <div key={i} className="flex gap-3 mb-3 animate-fade-in">
                               <input placeholder="Key (e.g. Material)" value={s.key} onChange={e => { const n = [...specs]; n[i].key = e.target.value; setSpecs(n); }} className="flex-1 px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm font-bold text-gray-700" />
                               <input placeholder="Value (e.g. Cotton)" value={s.value} onChange={e => { const n = [...specs]; n[i].value = e.target.value; setSpecs(n); }} className="flex-1 px-3 py-2 bg-white rounded-xl border border-gray-200 text-sm" />
-                              <button type="button" onClick={() => setSpecs(specs.filter((_, idx) => idx !== i))} className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-lg hover:bg-red-100">×</button>
+                              <button type="button" onClick={() => setSpecs(specs.filter((_, idx) => idx !== i))} className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded-lg hover:bg-red-100">Ã—</button>
                             </div>
                           ))}
                           {specs.length === 0 && <p className="text-xs text-gray-400 italic">No specifications added.</p>}
@@ -809,7 +973,7 @@ export default function AdminDashboard() {
                       </div>
 
                       <button type="submit" disabled={saving || !mainImage} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black shadow-xl shadow-gray-900/20 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:scale-100">
-                        {saving ? 'Saving Product...' : '💾 SAVE PRODUCT'}
+                        {saving ? 'Saving Product...' : 'ðŸ’¾ SAVE PRODUCT'}
                       </button>
                     </form>
                   </div>
@@ -822,22 +986,22 @@ export default function AdminDashboard() {
                         {p.image_url ? (
                           <img src={p.image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 mix-blend-multiply" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-3xl opacity-20">📦</div>
+                          <div className="w-full h-full flex items-center justify-center text-3xl opacity-20">ðŸ“¦</div>
                         )}
                         <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => loadProductForEdit(p)} className="w-8 h-8 bg-white/90 backdrop-blur text-blue-500 rounded-full flex items-center justify-center shadow-sm hover:bg-blue-50">✏️</button>
-                          <button onClick={() => deleteProduct(p.id)} className="w-8 h-8 bg-white/90 backdrop-blur text-red-500 rounded-full flex items-center justify-center shadow-sm hover:bg-red-50">🗑️</button>
+                          <button onClick={() => loadProductForEdit(p)} className="w-8 h-8 bg-white/90 backdrop-blur text-blue-500 rounded-full flex items-center justify-center shadow-sm hover:bg-blue-50">âœï¸</button>
+                          <button onClick={() => deleteProduct(p.id)} className="w-8 h-8 bg-white/90 backdrop-blur text-red-500 rounded-full flex items-center justify-center shadow-sm hover:bg-red-50">ðŸ—‘ï¸</button>
                         </div>
                       </div>
                       <h4 className="font-bold text-gray-900 truncate mb-1">{p.name}</h4>
                       <p className="text-gray-400 text-xs mb-3">
-                        {p.brand || 'No Brand'}{typeof p.quantity === 'number' ? ` • ${p.quantity} in stock` : ''}
+                        {p.brand || 'No Brand'}{typeof p.quantity === 'number' ? ` â€¢ ${p.quantity} in stock` : ''}
                       </p>
                       <div className="flex justify-between items-center">
-                        <span className="text-xl font-black text-gray-900">₱{p.price.toFixed(2)}</span>
+                        <span className="text-xl font-black text-gray-900">â‚±{p.price.toFixed(2)}</span>
                         <button onClick={() => { setTrainingProduct(p); trainingFileRef.current?.click(); }}
                           className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors">
-                          🎯 Train AI
+                          ðŸŽ¯ Train AI
                         </button>
                       </div>
                     </div>
@@ -885,7 +1049,7 @@ export default function AdminDashboard() {
                 <h3 className="text-2xl font-black text-gray-900 mb-6">Inventory Search</h3>
                 <div className="flex gap-4 mb-8">
                   <div className="flex-1 relative">
-                    <span className="absolute left-4 top-4 text-gray-400">🔍</span>
+                    <span className="absolute left-4 top-4 text-gray-400">ðŸ”</span>
                     <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search by name, brand, desc..."
                       className="w-full pl-10 pr-4 py-4 bg-gray-50 border-none rounded-2xl text-gray-900 font-bold placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all" />
                   </div>
@@ -895,7 +1059,7 @@ export default function AdminDashboard() {
                 <div className="inline-flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                   <span className="text-gray-400 font-medium text-sm text-gray-500">or use AI vision</span>
                   <label className="px-4 py-2 bg-white border border-gray-200 shadow-sm text-gray-700 rounded-xl cursor-pointer hover:bg-gray-50 font-bold text-sm transition-all flex items-center gap-2">
-                    📷 Scan Product
+                    ðŸ“· Scan Product
                     <input type="file" accept="image/*" onChange={handleScanFile} ref={scanFileRef} className="hidden" />
                   </label>
                   {scanning && <span className="text-orange-500 font-bold animate-pulse">Scanning...</span>}
@@ -913,16 +1077,163 @@ export default function AdminDashboard() {
                         {p.brand && <p className="text-gray-400 text-xs font-medium">{p.brand}</p>}
                       </div>
                       <div className="text-right">
-                        <div className="text-gray-900 font-black">₱{p.price.toFixed(2)}</div>
+                        <div className="text-gray-900 font-black">â‚±{p.price.toFixed(2)}</div>
                         <button onClick={() => { setTrainingProduct(p); trainingFileRef.current?.click(); }}
                           className="mt-1 px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors">
-                          🎯 Train
+                          ðŸŽ¯ Train
                         </button>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* USERS TAB */}
+          {activeTab === 'users' && (
+            <div className="max-w-5xl mx-auto animate-fade-in">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="bg-white rounded-3xl p-8 shadow-xl shadow-gray-100/50 border border-gray-100">
+                  <div className="flex items-start justify-between gap-3 mb-6">
+                    <div>
+                      <h3 className="text-2xl font-black text-gray-900">User Access</h3>
+                      <p className="text-gray-500 text-sm">Generate single-use codes for staff.</p>
+                    </div>
+                    <span className="text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-600 font-semibold">
+                      {staffForStore.length} users
+                    </span>
+                  </div>
+
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Store</label>
+                  <select
+                    value={selectedStaffStoreId}
+                    onChange={(e) => setSelectedStaffStoreId(e.target.value)}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 shadow-sm bg-gray-50 text-sm font-semibold text-gray-700 focus:border-gray-900 focus:ring-gray-900/10"
+                    disabled={!stores.length}
+                  >
+                    <option value="">Select a store</option>
+                    {stores.map((store) => (
+                      <option key={store.id} value={store.id}>{store.name}</option>
+                    ))}
+                  </select>
+
+                  <div className="mt-5 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider">Single-use code (10 minutes)</p>
+                    <div className="flex items-center justify-between mt-3">
+                      <span className="text-3xl font-mono font-black tracking-[0.24em] text-gray-900">
+                        {staffCodeLoading ? '••••••' : staffCode || '------'}
+                      </span>
+                      <div className="text-right">
+                        <p className={`text-xs font-bold ${staffCodeStatus === 'expired' ? 'text-rose-500' : 'text-emerald-600'}`}>
+                          {staffCodeStatus || 'ready'}
+                        </p>
+                        {staffCodeCountdown && (
+                          <p className="text-[11px] text-gray-500">expires in {staffCodeCountdown}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        type="button"
+                        onClick={() => copyValue(staffCode)}
+                        disabled={!staffCode || staffCodeLoading}
+                        className="flex-1 rounded-xl bg-white border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-100 disabled:opacity-50"
+                      >
+                        Copy code
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => renewStaffCode()}
+                        disabled={!selectedStaffStoreId || staffCodeLoading}
+                        className="flex-1 rounded-xl bg-gray-900 text-white px-4 py-2 text-sm font-bold shadow-lg shadow-gray-900/10 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        New code
+                      </button>
+                    </div>
+                    <p className="mt-3 text-xs text-gray-500">
+                      Share this code and store ID. Each code can be used once by a teammate.
+                    </p>
+                    {selectedStaffStoreId && (
+                      <p className="mt-2 text-[11px] font-mono text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2 break-all">
+                        Store ID: {selectedStaffStoreId}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-3xl p-8 shadow-xl shadow-gray-100/50 border border-gray-100 lg:col-span-2">
+                  <div className="flex items-center justify-between gap-4 mb-4">
+                    <div>
+                      <h3 className="text-2xl font-black text-gray-900">Team Directory</h3>
+                      <p className="text-gray-500 text-sm">View who has access and adjust roles.</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fetchStaff()}
+                        className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 mb-4 text-sm text-gray-500">
+                    <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 font-semibold">
+                      {staffForStore.length} {selectedStaffStoreId ? 'for this store' : 'total'}
+                    </span>
+                    <span>Admins can edit roles; removing a user revokes access immediately.</span>
+                  </div>
+
+                  {staffLoading ? (
+                    <div className="space-y-3">
+                      <div className="h-3 w-2/3 bg-gray-100 rounded-full animate-pulse" />
+                      <div className="h-3 w-1/2 bg-gray-100 rounded-full animate-pulse" />
+                      <div className="h-3 w-3/4 bg-gray-100 rounded-full animate-pulse" />
+                    </div>
+                  ) : staffForStore.length === 0 ? (
+                    <div className="p-6 rounded-2xl bg-gray-50 border border-dashed border-gray-200 text-center text-gray-500">
+                      No users yet. Generate a code to invite your first teammate.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {staffForStore.map(member => (
+                        <div key={member.id} className="p-4 rounded-2xl border border-gray-100 bg-gray-50/60 flex flex-col sm:flex-row sm:items-center gap-4">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#E0F2FE] to-[#D4F5E9] flex items-center justify-center text-blue-700 font-black text-lg">
+                            {(member.name || member.email || 'U').slice(0, 1).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-bold text-gray-900 truncate">{member.name || member.email || 'Unnamed user'}</span>
+                              {member.email && <span className="text-xs text-gray-500 truncate">{member.email}</span>}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">Store: {member.store_name || 'Unassigned'}</p>
+                            <p className="text-[11px] text-gray-400">Added {new Date(member.created_at).toLocaleString()}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={member.role || 'staff'}
+                              onChange={(e) => updateStaffRole(member.id, e.target.value)}
+                              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 focus:border-gray-900 focus:ring-gray-900/10"
+                            >
+                              <option value="staff">Staff</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => removeStaffMember(member.id)}
+                              className="rounded-xl px-3 py-2 text-sm font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-100"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1044,23 +1355,23 @@ export default function AdminDashboard() {
               {/* Stats Cards */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white rounded-3xl p-6 shadow-xl shadow-gray-100 border border-gray-100 text-center">
-                  <div className="text-4xl mb-2">📦</div>
+                  <div className="text-4xl mb-2">ðŸ“¦</div>
                   <div className="text-3xl font-black text-gray-900">{products.length}</div>
                   <div className="text-gray-400 text-sm font-medium">Total Products</div>
                 </div>
                 <div className="bg-white rounded-3xl p-6 shadow-xl shadow-gray-100 border border-gray-100 text-center">
-                  <div className="text-4xl mb-2">👁️</div>
+                  <div className="text-4xl mb-2">ðŸ‘ï¸</div>
                   <div className="text-3xl font-black text-gray-900">{products.reduce((sum, p) => sum + (Number(p.scan_count) || 0), 0)}</div>
                   <div className="text-gray-400 text-sm font-medium">Total Scans</div>
                 </div>
                 <div className="bg-white rounded-3xl p-6 shadow-xl shadow-gray-100 border border-gray-100 text-center">
-                  <div className="text-4xl mb-2">📁</div>
+                  <div className="text-4xl mb-2">ðŸ“</div>
                   <div className="text-3xl font-black text-gray-900">{categories.length}</div>
                   <div className="text-gray-400 text-sm font-medium">Categories</div>
                 </div>
                 <div className="bg-white rounded-3xl p-6 shadow-xl shadow-gray-100 border border-gray-100 text-center">
-                  <div className="text-4xl mb-2">💰</div>
-                  <div className="text-3xl font-black text-gray-900">₱{products.reduce((sum, p) => sum + (p.price * (p.quantity || 0)), 0).toLocaleString()}</div>
+                  <div className="text-4xl mb-2">ðŸ’°</div>
+                  <div className="text-3xl font-black text-gray-900">â‚±{products.reduce((sum, p) => sum + (p.price * (p.quantity || 0)), 0).toLocaleString()}</div>
                   <div className="text-gray-400 text-sm font-medium">Inventory Value</div>
                 </div>
               </div>
@@ -1068,7 +1379,7 @@ export default function AdminDashboard() {
               {/* Top Products */}
               <div className="bg-white rounded-3xl p-8 shadow-xl shadow-gray-100 border border-gray-100">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-black text-gray-900">🔥 Most Viewed Products</h3>
+                  <h3 className="text-2xl font-black text-gray-900">ðŸ”¥ Most Viewed Products</h3>
                   <span className="text-gray-400 text-sm font-medium">Sorted by scan count</span>
                 </div>
 
@@ -1085,12 +1396,12 @@ export default function AdminDashboard() {
                           {p.image_url ? (
                             <img src={p.image_url} alt="" className="w-full h-full object-cover mix-blend-multiply" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-2xl opacity-30">📦</div>
+                            <div className="w-full h-full flex items-center justify-center text-2xl opacity-30">ðŸ“¦</div>
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="font-bold text-gray-900 truncate">{p.name}</h4>
-                          <p className="text-gray-400 text-xs">{p.brand || 'No Brand'} • ₱{p.price.toFixed(2)}</p>
+                          <p className="text-gray-400 text-xs">{p.brand || 'No Brand'} â€¢ â‚±{p.price.toFixed(2)}</p>
                         </div>
                         <div className="text-right">
                           <div className="text-2xl font-black text-gray-900">{Number(p.scan_count) || 0}</div>
@@ -1101,7 +1412,7 @@ export default function AdminDashboard() {
 
                   {products.length === 0 && (
                     <div className="text-center py-12 text-gray-400">
-                      <div className="text-4xl mb-4 opacity-30">📊</div>
+                      <div className="text-4xl mb-4 opacity-30">ðŸ“Š</div>
                       <p>No product data yet</p>
                     </div>
                   )}
@@ -1177,10 +1488,10 @@ function CategoryTreeItem({ cat, onDelete, products, depth = 0 }: {
 
       <div className="flex items-center justify-between py-3 px-4 mb-2 bg-gray-50 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors group">
         <span className="text-gray-700 font-bold flex items-center gap-2">
-          <span className="text-lg opacity-50">📁</span> {cat.name}
+          <span className="text-lg opacity-50">ðŸ“</span> {cat.name}
           <span className="text-gray-400 text-xs font-normal bg-white px-2 py-0.5 rounded-md border border-gray-100">{count} items</span>
         </span>
-        <button onClick={() => onDelete(cat.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100">🗑️</button>
+        <button onClick={() => onDelete(cat.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100">ðŸ—‘ï¸</button>
       </div>
       {cat.children?.map(child => (
         <CategoryTreeItem key={child.id} cat={child} onDelete={onDelete} products={products} depth={depth + 1} />
@@ -1188,4 +1499,5 @@ function CategoryTreeItem({ cat, onDelete, products, depth = 0 }: {
     </div>
   );
 }
+
 

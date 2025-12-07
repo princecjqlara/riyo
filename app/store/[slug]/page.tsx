@@ -19,6 +19,8 @@ type Product = {
   sizes: ProductSize[] | null;
   wholesale_tiers: { min_qty: number; price: number; label?: string }[] | null;
   quantity: number | null;
+  scan_count?: number | null;
+  created_at?: string;
 };
 
 type CartItem = {
@@ -32,6 +34,14 @@ type CartItem = {
   size: string | null;
   product: Product;
 };
+
+const pastelCards = [
+  { bg: 'from-[#E0F2FE] to-[#E8F4FF]', shadow: 'shadow-blue-100' },
+  { bg: 'from-[#FFE4E6] to-[#FFF1F2]', shadow: 'shadow-rose-100' },
+  { bg: 'from-[#FEF9C3] to-[#FFF7D6]', shadow: 'shadow-amber-100' },
+  { bg: 'from-[#D4F5E9] to-[#E4FBF1]', shadow: 'shadow-emerald-100' },
+  { bg: 'from-[#EDE9FE] to-[#F4F0FF]', shadow: 'shadow-violet-100' },
+];
 
 export default function StoreFrontPage() {
   const params = useParams();
@@ -49,6 +59,7 @@ export default function StoreFrontPage() {
   const [cartTotal, setCartTotal] = useState(0);
   const [cartDiscount, setCartDiscount] = useState(0);
   const [mode, setMode] = useState<'browse' | 'cart' | 'scan'>('browse');
+  const [viewTab, setViewTab] = useState<'popular' | 'newest' | 'categories'>('popular');
   const [message, setMessage] = useState('');
   const [transferCode, setTransferCode] = useState<string | null>(null);
   const [transferExpires, setTransferExpires] = useState<string | null>(null);
@@ -150,6 +161,21 @@ export default function StoreFrontPage() {
     );
   }, [products, searchQuery, selectedCat]);
 
+  const displayProducts = useMemo(() => {
+    const base = filteredProducts.slice();
+    if (viewTab === 'popular') {
+      return base.sort((a, b) => (b.scan_count ?? 0) - (a.scan_count ?? 0));
+    }
+    if (viewTab === 'newest') {
+      return base.sort((a, b) => {
+        const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return db - da;
+      });
+    }
+    return base;
+  }, [filteredProducts, viewTab]);
+
   const addToCart = async (productId: string, qty: number, size?: string | null) => {
     if (!store || !sessionId) return;
     const res = await fetch('/api/cart', {
@@ -231,107 +257,289 @@ export default function StoreFrontPage() {
   };
 
   const cartCount = cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-  const displayProducts = filteredProducts;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin h-12 w-12 border-2 border-gray-300 border-t-gray-900 rounded-full" />
-      </div>
-    );
-  }
-
-  if (!store) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-700">
-        Store not found.
+      <div className="min-h-screen bg-gradient-to-b from-[#F8FAFF] to-[#F6F8FB] flex items-center justify-center text-slate-500">
+        Loading store...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <div
-        className={`relative h-56 ${store.cover_url ? '' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}
-        style={store.cover_url ? { backgroundImage: `url(${store.cover_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
-      >
-        <div className={`absolute inset-0 ${store.cover_url ? 'bg-black/30' : 'bg-black/10'}`} />
-        <div className="max-w-5xl mx-auto px-6 flex items-end h-full pb-6 relative">
-          <div
-            className="w-24 h-24 rounded-full bg-white shadow-xl flex items-center justify-center text-3xl font-black text-indigo-700 border-4 border-white -mb-10 overflow-hidden"
-            style={store.avatar_url ? { backgroundImage: `url(${store.avatar_url})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
-          >
-            {!store.avatar_url && (store.name?.slice(0, 1) || 'S')}
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-6 -mt-10 relative z-10">
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="min-h-screen bg-gradient-to-b from-[#F8FAFF] to-[#F6F8FB] text-slate-900">
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="bg-white/90 backdrop-blur rounded-3xl p-6 shadow-lg shadow-slate-200 border border-slate-100">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-black text-gray-900">{store.name}</h1>
-              <p className="text-sm text-gray-500 mt-1">Shareable link: /store/{store.slug}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Storefront</p>
+              <h1 className="text-3xl font-black text-slate-900 mt-1">{store?.name || 'Storefront'}</h1>
+              <p className="text-sm text-slate-500">Shareable link: /store/{store?.slug}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => {
-                  navigator.clipboard?.writeText(window.location.href);
-                  setMessage('Store link copied');
+                  if (typeof window !== 'undefined') {
+                    navigator.clipboard?.writeText(window.location.href);
+                    setMessage('Store link copied');
+                  }
                 }}
-                className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 bg-white hover:border-indigo-200 hover:text-indigo-700 transition-colors"
               >
                 Copy link
               </button>
               <button
-                onClick={() => {
-                  navigator.clipboard?.writeText(`/store/${store.slug}`);
-                  setMessage('Store parameter copied');
-                }}
-                className="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800"
+                onClick={() => setMode('cart')}
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors"
               >
-                Parameter
+                Cart ({cartCount})
               </button>
             </div>
           </div>
 
-          <div className="flex gap-2 mt-6">
+          <div className="flex gap-2 mt-4">
             {(['browse', 'cart', 'scan'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setMode(tab)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold ${mode === tab ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'}`}
+                className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+                  mode === tab ? 'bg-slate-900 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
               >
                 {tab === 'browse' ? 'Shop' : tab === 'cart' ? `Cart (${cartCount})` : 'Scan'}
               </button>
             ))}
           </div>
-        </div>
 
-        {message && (
-          <div className="mt-4 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl p-3 text-sm">
-            {message}
-          </div>
-        )}
+          {message && (
+            <div className="mt-4 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl p-3 text-sm">
+              {message}
+            </div>
+          )}
 
-        {mode === 'browse' && (
-          <div className="mt-6 space-y-6">
-            <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
-              <div className="flex gap-3 items-center">
+          {mode === 'browse' && (
+            <div className="mt-6 space-y-6">
+              <div className="rounded-3xl bg-gradient-to-br from-[#E8F0FF] via-white to-[#F6F8FF] p-6 shadow-sm border border-slate-100">
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Let&apos;s explore</p>
+                    <h2 className="text-3xl font-black text-slate-900">PriceScan</h2>
+                    <p className="text-sm text-slate-500 mt-1">Discover products in {store?.name || 'this store'}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setMode('cart')}
+                      className="w-11 h-11 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-center text-slate-600 hover:shadow-md transition-all"
+                    >
+                      🛒
+                    </button>
+                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white font-bold flex items-center justify-center shadow-md">
+                      {store?.name?.[0]?.toUpperCase() || 'S'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 items-center">
+                  <div className="flex-1 relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                    <input
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Search products..."
+                      className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white border border-slate-200 shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-4 py-3 rounded-2xl bg-indigo-600 text-white font-semibold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-colors"
+                  >
+                    📷 Scan
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleScanUpload(file);
+                    }}
+                  />
+                </div>
+
+                <div className="flex gap-4 mt-5 text-sm font-semibold text-slate-500">
+                  {(['popular', 'newest', 'categories'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setViewTab(tab)}
+                      className={`pb-2 border-b-2 transition-colors ${
+                        viewTab === tab ? 'border-indigo-500 text-indigo-700' : 'border-transparent hover:text-slate-700'
+                      }`}
+                    >
+                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 overflow-x-auto mt-3 pb-1">
+                  <button
+                    onClick={() => setSelectedCat(null)}
+                    className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${
+                      !selectedCat
+                        ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-100'
+                    }`}
+                  >
+                    All items
+                  </button>
+                  {categories.map(cat => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCat(cat.id)}
+                      className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${
+                        selectedCat === cat.id
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-100'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {displayProducts.map((product, idx) => {
+                  const palette = pastelCards[idx % pastelCards.length];
+                  const rating = Math.max(4, Math.min(5, 4 + ((product.scan_count ?? 0) % 10) / 20));
+                  const stock = product.quantity ?? 0;
+                  return (
+                    <div
+                      key={product.id}
+                      className={`rounded-3xl border border-white bg-gradient-to-br ${palette.bg} ${palette.shadow} p-4 shadow-md hover:shadow-lg transition-all flex flex-col`}
+                    >
+                      <div className="relative mb-3">
+                        <div className="aspect-square rounded-2xl overflow-hidden bg-white/70 border border-white shadow-inner">
+                          {product.image_url ? (
+                            <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-400 text-lg">No photo</div>
+                          )}
+                        </div>
+                        <div className="absolute top-2 left-2 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs font-semibold text-slate-700 border border-slate-100">
+                          {product.brand || 'Unbranded'}
+                        </div>
+                        <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded-full text-xs font-semibold text-amber-600 border border-amber-100 flex items-center gap-1">
+                          ⭐ {rating.toFixed(1)}
+                        </div>
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <h3 className="text-lg font-black text-slate-900 leading-tight line-clamp-2">{product.name}</h3>
+                        <p className="text-xs font-semibold text-slate-500 uppercase">
+                          {categories.find(c => c.id === product.category_id)?.name || 'General'}
+                        </p>
+                        <p className="text-sm text-slate-500 line-clamp-2">{product.description || ''}</p>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <div>
+                          <div className="text-2xl font-black text-slate-900">₱ {product.price.toFixed(0)}</div>
+                          <div className="text-xs font-semibold text-rose-500">{stock > 0 ? `${stock} left` : '0 left'}</div>
+                        </div>
+                        <button
+                          onClick={() => addToCart(product.id, 1, product.sizes?.[0]?.size)}
+                          className="px-4 py-3 rounded-2xl bg-slate-900 text-white text-sm font-semibold shadow-lg shadow-slate-900/15 hover:scale-105 active:scale-95 transition-transform"
+                        >
+                          Add to cart
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {displayProducts.length === 0 && (
+                <div className="text-center text-slate-500 py-12 bg-white rounded-2xl border border-dashed border-slate-200">
+                  No products yet.
+                </div>
+              )}
+            </div>
+          )}
+
+          {mode === 'cart' && (
+            <div className="mt-6 bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-slate-900">Cart</h2>
+                <span className="text-sm text-slate-500">{cartCount} items</span>
+              </div>
+              {cartItems.length === 0 ? (
+                <p className="text-slate-500">Your cart is empty.</p>
+              ) : (
+                <div className="space-y-4">
+                  {cartItems.map(item => (
+                    <div key={item.id} className="flex items-center gap-3 border border-slate-100 rounded-2xl p-3 bg-slate-50/50">
+                      <img src={item.product.image_url || ''} className="w-16 h-16 rounded-xl object-cover bg-slate-100" />
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-slate-900">{item.product.name}</h4>
+                        <p className="text-sm text-slate-500">
+                          ₱ {item.unit_price.toFixed(2)} × {item.quantity} pcs
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateCartItem(item.id, Math.max(1, item.quantity - 1))}
+                          className="w-8 h-8 rounded-full bg-slate-100 text-slate-700"
+                        >
+                          -
+                        </button>
+                        <span className="w-6 text-center font-semibold">{item.quantity}</span>
+                        <button
+                          onClick={() => updateCartItem(item.id, item.quantity + 1)}
+                          className="w-8 h-8 rounded-full bg-slate-100 text-slate-700"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-slate-900">₱ {item.subtotal.toFixed(2)}</p>
+                        <button onClick={() => removeCartItem(item.id)} className="text-xs text-rose-500">
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="border-t border-slate-100 pt-4 flex items-center justify-between">
+                    <div className="text-sm text-slate-500">
+                      {cartDiscount > 0 && <p className="text-emerald-600 font-semibold">Savings: ₱ {cartDiscount.toFixed(2)}</p>}
+                      <p className="text-lg font-black text-slate-900">Total: ₱ {cartTotal.toFixed(2)}</p>
+                    </div>
+                    {transferCode ? (
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500">Show this to staff</p>
+                        <p className="text-3xl font-mono font-black tracking-widest text-slate-900">{transferCode}</p>
+                        {transferExpires && <p className="text-xs text-slate-400">Expires {new Date(transferExpires).toLocaleTimeString()}</p>}
+                      </div>
+                    ) : (
+                      <button onClick={generateTransferCode} className="px-5 py-3 rounded-2xl bg-slate-900 text-white font-semibold">
+                        Get checkout code
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {mode === 'scan' && (
+            <div className="mt-6 bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Scan product</h2>
+                  <p className="text-sm text-slate-500">Upload a photo to find a match in this store.</p>
+                </div>
+                {scanning && <span className="text-sm text-indigo-600 font-semibold">Scanning...</span>}
+              </div>
+              <label className="border-2 border-dashed border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-200">
                 <input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search products..."
-                  className="flex-1 px-4 py-3 rounded-2xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
-                />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-3 rounded-2xl bg-gray-900 text-white font-semibold"
-                >
-                  Upload to scan
-                </button>
-                <input
-                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   className="hidden"
@@ -340,131 +548,12 @@ export default function StoreFrontPage() {
                     if (file) handleScanUpload(file);
                   }}
                 />
-              </div>
-              <div className="flex gap-2 overflow-x-auto mt-4">
-                <button
-                  onClick={() => setSelectedCat(null)}
-                  className={`px-4 py-2 rounded-full text-sm font-semibold ${!selectedCat ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'}`}
-                >
-                  All items
-                </button>
-                {categories.map(cat => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSelectedCat(cat.id)}
-                    className={`px-4 py-2 rounded-full text-sm font-semibold ${selectedCat === cat.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'}`}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
-              </div>
+                <span className="text-3xl text-slate-400 mb-2">📷</span>
+                <p className="text-sm text-slate-600">Drop an image or click to upload</p>
+              </label>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {displayProducts.map(product => (
-                <div key={product.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col">
-                  <div className="aspect-square rounded-xl bg-gray-100 overflow-hidden mb-3">
-                    {product.image_url ? (
-                      <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-lg">No photo</div>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-500 uppercase">{product.brand || 'Unbranded'}</p>
-                    <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
-                    <p className="text-gray-600 text-sm line-clamp-2">{product.description || ''}</p>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="text-xl font-black text-gray-900">₱{product.price.toFixed(2)}</span>
-                    <button
-                      onClick={() => addToCart(product.id, 1, product.sizes?.[0]?.size)}
-                      className="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {displayProducts.length === 0 && (
-              <div className="text-center text-gray-500 py-12 bg-white rounded-2xl border border-dashed border-gray-200">
-                No products yet.
-              </div>
-            )}
-          </div>
-        )}
-
-        {mode === 'cart' && (
-          <div className="mt-6 bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Cart</h2>
-              <span className="text-sm text-gray-500">{cartCount} items</span>
-            </div>
-            {cartItems.length === 0 ? (
-              <p className="text-gray-500">Your cart is empty.</p>
-            ) : (
-              <div className="space-y-4">
-                {cartItems.map(item => (
-                  <div key={item.id} className="flex items-center gap-3 border border-gray-100 rounded-2xl p-3">
-                    <img src={item.product.image_url || ''} className="w-16 h-16 rounded-xl object-cover bg-gray-100" />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900">{item.product.name}</h4>
-                      <p className="text-sm text-gray-500">₱{item.unit_price.toFixed(2)} · {item.quantity} pcs</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => updateCartItem(item.id, Math.max(1, item.quantity - 1))} className="w-8 h-8 rounded-full bg-gray-100 text-gray-700">-</button>
-                      <span className="w-6 text-center font-semibold">{item.quantity}</span>
-                      <button onClick={() => updateCartItem(item.id, item.quantity + 1)} className="w-8 h-8 rounded-full bg-gray-100 text-gray-700">+</button>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-gray-900">₱{item.subtotal.toFixed(2)}</p>
-                      <button onClick={() => removeCartItem(item.id)} className="text-xs text-red-500">Remove</button>
-                    </div>
-                  </div>
-                ))}
-                <div className="border-t border-gray-100 pt-4 flex items-center justify-between">
-                  <div className="text-sm text-gray-500">
-                    {cartDiscount > 0 && <p className="text-green-600 font-semibold">Savings: ₱{cartDiscount.toFixed(2)}</p>}
-                    <p className="text-lg font-black text-gray-900">Total: ₱{cartTotal.toFixed(2)}</p>
-                  </div>
-                  {transferCode ? (
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500">Show this to staff</p>
-                      <p className="text-3xl font-mono font-black tracking-widest text-gray-900">{transferCode}</p>
-                      {transferExpires && <p className="text-xs text-gray-400">Expires {new Date(transferExpires).toLocaleTimeString()}</p>}
-                    </div>
-                  ) : (
-                    <button onClick={generateTransferCode} className="px-5 py-3 rounded-2xl bg-gray-900 text-white font-semibold">
-                      Get checkout code
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {mode === 'scan' && (
-          <div className="mt-6 bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Scan product</h2>
-                <p className="text-sm text-gray-500">Upload a photo to find a match in this store.</p>
-              </div>
-              {scanning && <span className="text-sm text-indigo-600 font-semibold">Scanning...</span>}
-            </div>
-            <label className="border-2 border-dashed border-gray-200 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-gray-300">
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleScanUpload(file);
-              }} />
-              <span className="text-3xl text-gray-400 mb-2">Scan</span>
-              <p className="text-sm text-gray-600">Drop an image or click to upload</p>
-            </label>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

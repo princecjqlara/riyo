@@ -1,11 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeProductImage, suggestCategory } from '@/lib/nvidia-dino';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
+import { roleSatisfies } from '@/lib/roles';
 
-const getSupabase = () => createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const ensureStoreAccess = async (
+    supabase: ReturnType<typeof createClient>,
+    storeId: string,
+    userId: string,
+    role: string,
+) => {
+    if (!storeId) return false;
+    if (role === 'admin') return true;
+
+    if (role === 'staff') {
+        const { data, error } = await supabase
+            .from('staff')
+            .select('store_id')
+            .eq('user_id', userId)
+            .eq('store_id', storeId)
+            .limit(1);
+        if (error) throw error;
+        return !!data && data.length > 0;
+    }
+
+    const { data: store, error } = await supabase
+        .from('stores')
+        .select('organizer_id')
+        .eq('id', storeId)
+        .single();
+    if (error) throw error;
+    return store?.organizer_id === userId;
+};
 
 interface BulkResult {
     index: number;
@@ -18,18 +43,54 @@ interface BulkResult {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { images, autoSave = false } = body;
+        const { images, autoSave = false, storeId } = body;
 
         if (!images || !Array.isArray(images) || images.length === 0) {
             return NextResponse.json({ error: 'No images provided' }, { status: 400 });
         }
 
-        const supabase = getSupabase();
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        // For autosave we need an authenticated user with privileges and a target store
+        let userRole: string | null = null;
+        if (autoSave) {
+            if (!user) {
+                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            }
+
+            const { data: profile } = await supabase
+                .from('user_profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+
+            userRole = profile?.role || null;
+            if (!userRole || !roleSatisfies(['admin', 'staff', 'organizer'], userRole as any)) {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            }
+
+            if (!storeId) {
+                return NextResponse.json({ error: 'Store is required for bulk save' }, { status: 400 });
+            }
+
+            const allowed = await ensureStoreAccess(supabase, storeId, user.id, userRole);
+            if (!allowed) {
+                return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+            }
+        }
 
         // Get existing categories
-        const { data: categories } = await supabase
+        let categoryQuery = supabase
             .from('categories')
-            .select('id, name, parent_id');
+            .select('id, name, parent_id, store_id');
+
+        // Scope to the target store (or global/null categories) if provided
+        if (storeId) {
+            categoryQuery = categoryQuery.or(`store_id.eq.${storeId},store_id.is.null`);
+        }
+
+        const { data: categories } = await categoryQuery;
 
         const results: BulkResult[] = [];
         const createdCategories: { [key: string]: string } = {};
@@ -55,7 +116,8 @@ export async function POST(request: NextRequest) {
                             .from('categories')
                             .insert({
                                 name: categorySuggestion.newCategory.name,
-                                parent_id: categorySuggestion.newCategory.parentId
+                                parent_id: categorySuggestion.newCategory.parentId,
+                                store_id: storeId || null,
                             })
                             .select()
                             .single();
@@ -81,6 +143,8 @@ export async function POST(request: NextRequest) {
                             specifications: analysis.specifications,
                             price: analysis.suggestedPrice || 0,
                             quantity: 0,
+                            store_id: storeId || null,
+                            created_by: user?.id || null,
                         })
                         .select()
                         .single();

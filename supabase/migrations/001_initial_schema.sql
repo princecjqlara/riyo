@@ -43,6 +43,21 @@ CREATE TABLE IF NOT EXISTS product_images (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Align embedding column type for existing databases that used jsonb
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'product_images'
+      AND column_name = 'embedding'
+      AND udt_name <> 'vector'
+  ) THEN
+    ALTER TABLE product_images
+      ALTER COLUMN embedding TYPE vector(1024) USING NULL;
+  END IF;
+END $$;
+
 -- Legacy embeddings table (for backward compatibility)
 CREATE TABLE IF NOT EXISTS item_embeddings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
