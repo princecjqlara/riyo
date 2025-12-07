@@ -36,6 +36,7 @@ export interface BrandingSettings {
 
 export interface Item {
   id: string;
+  store_id?: string | null;
   name: string;
   price: number;
   description: string | null;
@@ -57,6 +58,7 @@ export interface ProductImage {
   id: string;
   item_id: string;
   image_url: string;
+  store_id?: string | null;
   image_type: 'front' | 'back' | 'side' | 'detail' | 'label' | 'barcode' | null;
   embedding: number[] | null;
   is_primary: boolean;
@@ -65,6 +67,7 @@ export interface ProductImage {
 
 export interface SimilarProduct {
   id: string;
+  store_id?: string | null;
   item1_id: string;
   item2_id: string;
   similarity_score: number | null;
@@ -74,6 +77,7 @@ export interface SimilarProduct {
 
 export interface SearchCorrection {
   id: string;
+  store_id?: string | null;
   user_image_url: string;
   predicted_item_id: string;
   correct_item_id: string;

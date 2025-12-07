@@ -166,52 +166,68 @@ export async function suggestCategory(analysis: ProductAnalysis, existingCategor
     categoryId: string | null;
     newCategory: { name: string; parentId: string | null } | null;
 }> {
-    // Try to find matching category
-    const category = analysis.category?.toLowerCase() || '';
-    const subcategory = analysis.subcategory?.toLowerCase() || '';
+    const normalize = (val?: string | null) => (val || '').toLowerCase().trim();
+    const category = normalize(analysis.category);
+    const subcategory = normalize(analysis.subcategory);
 
-    // Look for exact match first
+    const keywords = [
+        category,
+        subcategory,
+        ...analysis.features.map(normalize),
+        ...(analysis.material ? [normalize(analysis.material)] : []),
+        ...(analysis.colors ? analysis.colors.map(normalize) : []),
+    ].filter(Boolean);
+
+    // Build quick lookup of existing categories by normalized name
+    const catMap = new Map<string, { id: string; parent_id: string | null }>();
     for (const cat of existingCategories) {
-        const catName = cat.name.toLowerCase();
-        if (catName === category || catName === subcategory) {
-            return { categoryId: cat.id, newCategory: null };
+        catMap.set(normalize(cat.name), { id: cat.id, parent_id: cat.parent_id });
+    }
+
+    // 1) Exact matches on category/subcategory
+    for (const key of [category, subcategory]) {
+        if (key && catMap.has(key)) {
+            return { categoryId: catMap.get(key)!.id, newCategory: null };
         }
     }
 
-    // Look for partial match
+    // 2) Partial/keyword scoring
+    let bestMatch: { id: string; score: number; parent_id: string | null } | null = null;
     for (const cat of existingCategories) {
-        const catName = cat.name.toLowerCase();
-        if (category.includes(catName) || catName.includes(category)) {
-            return { categoryId: cat.id, newCategory: null };
+        const name = normalize(cat.name);
+        let score = 0;
+        if (category && (name.includes(category) || category.includes(name))) score += 3;
+        if (subcategory && (name.includes(subcategory) || subcategory.includes(name))) score += 3;
+
+        for (const kw of keywords) {
+            if (!kw) continue;
+            if (name.includes(kw) || kw.includes(name)) score += 1;
         }
-        if (subcategory && (subcategory.includes(catName) || catName.includes(subcategory))) {
-            return { categoryId: cat.id, newCategory: null };
+
+        if (score > (bestMatch?.score || 0)) {
+            bestMatch = { id: cat.id, score, parent_id: cat.parent_id };
         }
     }
 
-    // Suggest new category
-    if (analysis.category) {
-        // Find parent category
-        let parentId: string | null = null;
-        for (const cat of existingCategories) {
-            if (cat.name.toLowerCase() === category && !cat.parent_id) {
-                parentId = cat.id;
-                break;
-            }
-        }
+    if (bestMatch && bestMatch.score >= 2) {
+        return { categoryId: bestMatch.id, newCategory: null };
+    }
 
-        // If subcategory should be created
-        if (analysis.subcategory && parentId) {
+    // 3) Suggest new category/subcategory creation
+    if (category) {
+        // Try to nest subcategory under matching parent
+        const parent = catMap.get(category);
+        if (subcategory && parent) {
             return {
                 categoryId: null,
-                newCategory: { name: analysis.subcategory, parentId }
+                newCategory: { name: analysis.subcategory || subcategory, parentId: parent.id }
             };
         }
 
-        // Create main category
+        // Otherwise create main category
         return {
             categoryId: null,
-            newCategory: { name: analysis.category, parentId: null }
+            newCategory: { name: analysis.category || category, parentId: null }
         };
     }
 

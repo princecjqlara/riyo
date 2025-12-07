@@ -8,10 +8,12 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const storeId = new URL(request.url).searchParams.get('storeId');
     const supabase = createClient();
     const { data, error } = await supabase
       .from('items')
       .select('*')
+      .eq('store_id', storeId)
       .eq('id', id)
       .single();
 
@@ -33,6 +35,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+    const storeId = new URL(request.url).searchParams.get('storeId');
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -65,12 +68,14 @@ export async function PUT(
       distinguishing_features: body.distinguishing_features || null,
       min_confidence: body.min_confidence || 0.7,
       updated_by: user.id,
+      store_id: storeId || body.store_id || null,
     };
 
     const { data, error } = await supabase
       .from('items')
       .update(productData)
       .eq('id', id)
+      .eq('store_id', storeId || productData.store_id)
       .select()
       .single();
 
@@ -92,6 +97,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const storeId = new URL(request.url).searchParams.get('storeId');
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -113,7 +119,8 @@ export async function DELETE(
     const { error } = await supabase
       .from('items')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('store_id', storeId);
 
     if (error) throw error;
 

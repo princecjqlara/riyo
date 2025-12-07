@@ -35,9 +35,11 @@ type TabType = 'products' | 'categories' | 'search' | 'analytics' | 'bulk';
 export default function AdminDashboard() {
   const [user, setUser] = useState<{ email: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentStoreId, setCurrentStoreId] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryTree, setCategoryTree] = useState<Category[]>([]);
+  const [analyticsCategory, setAnalyticsCategory] = useState<string>('');
   const [activeTab, setActiveTab] = useState<TabType>('products');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [message, setMessage] = useState('');
@@ -46,6 +48,7 @@ export default function AdminDashboard() {
   // Product form
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [name, setName] = useState('');
@@ -261,6 +264,31 @@ export default function AdminDashboard() {
     if (!confirm('Delete?')) return;
     await supabase.from('items').delete().eq('id', id);
     setProducts(products.filter(p => p.id !== id));
+    setSelectedProductIds(selectedProductIds.filter(pid => pid !== id));
+  };
+
+  const toggleSelectProduct = (id: string) => {
+    setSelectedProductIds(prev =>
+      prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]
+    );
+  };
+
+  const bulkDelete = async () => {
+    if (selectedProductIds.length === 0) return;
+    if (!confirm(`Delete ${selectedProductIds.length} products?`)) return;
+    const res = await fetch('/api/products', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: selectedProductIds })
+    });
+    if (res.ok) {
+      setProducts(products.filter(p => !selectedProductIds.includes(p.id)));
+      setSelectedProductIds([]);
+      setMessage('Products deleted.');
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setMessage(body.error || 'Failed to delete products.');
+    }
   };
 
   // === CATEGORY FUNCTIONS ===
@@ -725,6 +753,22 @@ export default function AdminDashboard() {
           {/* ANALYTICS TAB */}
           {activeTab === 'analytics' && (
             <div className="max-w-5xl mx-auto animate-fade-in">
+              {products.length > 0 && (
+                <div className="flex items-center justify-end mb-4">
+                  <label className="text-sm text-gray-500 mr-2">Filter by category:</label>
+                  <select
+                    value={analyticsCategory}
+                    onChange={(e) => setAnalyticsCategory(e.target.value)}
+                    className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700"
+                  >
+                    <option value="">All</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Stats Cards */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white rounded-3xl p-6 shadow-xl shadow-gray-100 border border-gray-100 text-center">
@@ -734,7 +778,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="bg-white rounded-3xl p-6 shadow-xl shadow-gray-100 border border-gray-100 text-center">
                   <div className="text-4xl mb-2">👁️</div>
-                  <div className="text-3xl font-black text-gray-900">{products.reduce((sum, p) => sum + (p.scan_count || 0), 0)}</div>
+                  <div className="text-3xl font-black text-gray-900">{products.reduce((sum, p) => sum + (Number(p.scan_count) || 0), 0)}</div>
                   <div className="text-gray-400 text-sm font-medium">Total Scans</div>
                 </div>
                 <div className="bg-white rounded-3xl p-6 shadow-xl shadow-gray-100 border border-gray-100 text-center">
@@ -757,7 +801,10 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="space-y-4">
-                  {[...products].sort((a, b) => (b.scan_count || 0) - (a.scan_count || 0)).slice(0, 10).map((p, idx) => (
+                  {([...products]
+                    .filter(p => !analyticsCategory || p.category_id === analyticsCategory)
+                    .sort((a, b) => (Number(b.scan_count) || 0) - (Number(a.scan_count) || 0))
+                    .slice(0, 10)).map((p, idx) => (
                     <div key={p.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-colors">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${idx < 3 ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
                         {idx + 1}
@@ -774,7 +821,7 @@ export default function AdminDashboard() {
                         <p className="text-gray-400 text-xs">{p.brand || 'No Brand'} • ₱{p.price.toFixed(2)}</p>
                       </div>
                       <div className="text-right">
-                        <div className="text-2xl font-black text-gray-900">{p.scan_count || 0}</div>
+                        <div className="text-2xl font-black text-gray-900">{Number(p.scan_count) || 0}</div>
                         <div className="text-xs text-gray-400">scans</div>
                       </div>
                     </div>
