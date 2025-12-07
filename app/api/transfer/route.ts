@@ -234,15 +234,14 @@ export async function PUT(request: NextRequest) {
             for (const item of items || []) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const product = Array.isArray((item as any).product) ? (item as any).product[0] : (item as any).product;
-                await supabase.rpc('decrement_stock', {
-                    product_id: product?.id,
-                    qty: (item as { quantity: number }).quantity
-                }).catch(() => {
-                    // Fallback if RPC doesn't exist
-                    supabase.from('items')
-                        .update({ quantity: supabase.rpc('greatest', { a: 0, b: `quantity - ${(item as { quantity: number }).quantity}` }) })
-                        .eq('id', product?.id);
-                });
+                try {
+                    await supabase.rpc('decrement_stock', {
+                        product_id: product?.id,
+                        qty: (item as { quantity: number }).quantity
+                    });
+                } catch {
+                    // Fallback if RPC doesn't exist - just skip
+                }
             }
 
             // Update transfer status
