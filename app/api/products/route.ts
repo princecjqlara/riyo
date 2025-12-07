@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import type { Item } from '@/types';
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,14 +41,14 @@ export async function POST(request: NextRequest) {
       .from('user_profiles')
       .select('role')
       .eq('id', user.id)
-      .single() as { data: { role: string } | null };
+      .single();
 
     if (!profile || (profile.role !== 'admin' && profile.role !== 'staff')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = await request.json();
-    const productData: Partial<Item> = {
+    const productData = {
       name: body.name,
       price: body.price,
       description: body.description || null,

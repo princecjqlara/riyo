@@ -19,7 +19,7 @@ export async function DELETE(
       .from('user_profiles')
       .select('role')
       .eq('id', user.id)
-      .single() as { data: { role: string } | null };
+      .single();
 
     if (!profile || profile.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
