@@ -9,6 +9,7 @@ const getSupabase = () => createClient(
 // GET - List all categories (with hierarchy)
 export async function GET() {
     try {
+        const supabase = getSupabase();
         const { data: categories, error } = await supabase
             .from('categories')
             .select('*')
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Name required' }, { status: 400 });
         }
 
+        const supabase = getSupabase();
         const { data: category, error } = await supabase
             .from('categories')
             .insert({
@@ -65,6 +67,7 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'ID required' }, { status: 400 });
         }
 
+        const supabase = getSupabase();
         const { error } = await supabase
             .from('categories')
             .delete()
