@@ -24,11 +24,11 @@ async function loadModel() {
     }
 
     const tf = await import('@tensorflow/tfjs');
-    
+
     // Load MobileNet model for feature extraction
     // Using a simpler approach that works reliably
     const MODEL_URL = 'https://tfhub.dev/tensorflow/tfjs-model/mobilenet_v2_1.0_224/1/default/1';
-    
+
     try {
       const model = await tf.loadLayersModel(MODEL_URL, { fromTFHub: true });
       return model;
@@ -109,7 +109,7 @@ export async function generateEmbeddingFromFile(file: File): Promise<number[]> {
 
     // Normalize the embedding vector for better similarity comparisons
     const tf = await import('@tensorflow/tfjs');
-    const embeddingTensor = tf.tensor1d(Array.from(embedding));
+    const embeddingTensor = tf.tensor1d(Array.from(embedding) as number[]);
     const norm = embeddingTensor.norm();
     const normalized = embeddingTensor.div(norm);
     const normalizedArray = Array.from(await normalized.data());
@@ -142,6 +142,6 @@ export async function generateEmbeddingFromBase64(base64: string): Promise<numbe
   const response = await fetch(base64);
   const blob = await response.blob();
   const file = new File([blob], 'image.jpg', { type: 'image/jpeg' });
-  
+
   return generateEmbeddingFromFile(file);
 }
