@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { PostgrestError } from '@supabase/supabase-js';
 
 type JoinRole = 'admin' | 'staff';
 
@@ -21,19 +22,20 @@ const generateCode = () => {
 
 const expireExpired = async (storeId: string, role: JoinRole) => {
   const supabase = getService();
-  await supabase
+  const { error } = await supabase
     .from('store_join_codes')
     .update({ status: 'expired' })
     .eq('store_id', storeId)
     .eq('role', role)
     .eq('status', 'active')
     .lte('expires_at', new Date().toISOString());
+  if (error) throw formatTableError(error);
 };
 
 export const getActiveCode = async (storeId: string, role: JoinRole) => {
   await expireExpired(storeId, role);
   const supabase = getService();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('store_join_codes')
     .select('*')
     .eq('store_id', storeId)
@@ -43,6 +45,7 @@ export const getActiveCode = async (storeId: string, role: JoinRole) => {
     .order('created_at', { ascending: false })
     .limit(1);
 
+  if (error) throw formatTableError(error);
   return data?.[0] || null;
 };
 
@@ -55,21 +58,23 @@ export const createJoinCode = async ({
   await expireExpired(storeId, role);
 
   // Expire existing active codes for this store/role
-  await supabase
+  const { error: expireError } = await supabase
     .from('store_join_codes')
     .update({ status: 'expired' })
     .eq('store_id', storeId)
     .eq('role', role)
     .eq('status', 'active');
+  if (expireError) throw formatTableError(expireError);
 
   // Generate unique code
   let code = generateCode();
   for (let i = 0; i < 5; i++) {
-    const { data: collision } = await supabase
+    const { data: collision, error } = await supabase
       .from('store_join_codes')
       .select('id')
       .eq('code', code)
       .limit(1);
+    if (error) throw formatTableError(error);
     if (!collision || collision.length === 0) break;
     code = generateCode();
   }
@@ -88,7 +93,7 @@ export const createJoinCode = async ({
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw formatTableError(error);
   return data;
 };
 
@@ -99,7 +104,7 @@ export const verifyJoinCode = async ({
 }: { storeId: string; role: JoinRole; code: string }) => {
   await expireExpired(storeId, role);
   const supabase = getService();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('store_join_codes')
     .select('*')
     .eq('store_id', storeId)
@@ -109,6 +114,7 @@ export const verifyJoinCode = async ({
     .gt('expires_at', new Date().toISOString())
     .limit(1);
 
+  if (error) throw formatTableError(error);
   return data?.[0] || null;
 };
 
@@ -130,6 +136,13 @@ export const consumeJoinCode = async ({
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw formatTableError(error);
   return data || null;
+};
+
+const formatTableError = (error: PostgrestError) => {
+  if (error.code === '42P01') {
+    return new Error('store_join_codes table is missing. Run migration 003_store_join_codes.sql in Supabase.');
+  }
+  return error;
 };

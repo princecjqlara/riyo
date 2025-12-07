@@ -24,6 +24,9 @@ export default function StaffManagementPage() {
   const [codeStatus, setCodeStatus] = useState<string | null>(null);
   const [countdown, setCountdown] = useState('');
   const [codeLoading, setCodeLoading] = useState(false);
+  const [renameStoreId, setRenameStoreId] = useState('');
+  const [renameStoreName, setRenameStoreName] = useState('');
+  const [renaming, setRenaming] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -84,6 +87,8 @@ export default function StaffManagementPage() {
         setStores(data.stores || []);
         if (!selectedStoreId && data.stores?.length) {
           setSelectedStoreId(data.stores[0].id);
+          setRenameStoreId(data.stores[0].id);
+          setRenameStoreName(data.stores[0].name);
         }
       }
     } catch (error) {
@@ -135,6 +140,35 @@ export default function StaffManagementPage() {
       setMessage(error instanceof Error ? error.message : 'Failed to renew code');
     } finally {
       setCodeLoading(false);
+    }
+  };
+
+  const handleRenameStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renameStoreId || !renameStoreName.trim()) {
+      setMessage('Select a store and enter a new name.');
+      return;
+    }
+    setRenaming(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/stores', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: renameStoreId, name: renameStoreName.trim() }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error || 'Failed to rename store');
+      }
+      const { store } = body;
+      setStores(stores.map((s) => (s.id === store.id ? store : s)));
+      setRenameStoreName(store.name);
+      setMessage('Store name updated.');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to rename store');
+    } finally {
+      setRenaming(false);
     }
   };
 
@@ -252,7 +286,62 @@ export default function StaffManagementPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-100 lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-100 lg:col-span-2 space-y-6">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xl font-semibold text-gray-900">Manage Stores</h2>
+                  <span className="text-sm text-gray-500">{stores.length} total</span>
+                </div>
+                <form onSubmit={handleRenameStore} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                  <div className="md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Store</label>
+                    <select
+                      value={renameStoreId}
+                      onChange={(e) => {
+                        setRenameStoreId(e.target.value);
+                        const match = stores.find((s) => s.id === e.target.value);
+                        if (match) setRenameStoreName(match.name);
+                      }}
+                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    >
+                      <option value="">Select a store</option>
+                      {stores.map((store) => (
+                        <option key={store.id} value={store.id}>
+                          {store.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">New name</label>
+                    <input
+                      type="text"
+                      value={renameStoreName}
+                      onChange={(e) => setRenameStoreName(e.target.value)}
+                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      placeholder="Enter new store name"
+                    />
+                  </div>
+                  <div className="md:col-span-1 flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={renaming}
+                      className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-white font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+                    >
+                      {renaming ? 'Renaming...' : 'Rename store'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copy(renameStoreId, 'Store ID')}
+                      disabled={!renameStoreId}
+                      className="inline-flex items-center justify-center rounded-md bg-gray-200 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300 disabled:opacity-50"
+                    >
+                      Copy ID
+                    </button>
+                  </div>
+                </form>
+              </div>
+
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900">Staff</h2>
                 <span className="text-sm text-gray-500">{Array.isArray(staff) ? staff.length : 0} total</span>
