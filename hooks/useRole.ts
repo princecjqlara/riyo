@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from './useAuth';
+import { roleSatisfies } from '@/lib/roles';
 import type { UserRole } from '@/types';
 
 export function useRole() {
@@ -8,21 +9,22 @@ export function useRole() {
 
   const hasRole = (role: UserRole | UserRole[]): boolean => {
     if (!profile) return false;
-    if (Array.isArray(role)) {
-      return role.includes(profile.role);
-    }
-    return profile.role === role;
+    return roleSatisfies(role, profile.role);
   };
 
   const isAdmin = () => hasRole('admin');
   const isStaff = () => hasRole('staff');
+  const isOrganizer = () => hasRole('organizer');
   const isStaffOrAdmin = () => hasRole(['admin', 'staff']);
+  const isOrganizerOrAdmin = () => hasRole(['organizer', 'admin']);
 
   return {
     role: profile?.role,
+    isOrganizer: isOrganizer(),
     isAdmin: isAdmin(),
     isStaff: isStaff(),
     isStaffOrAdmin: isStaffOrAdmin(),
+    isOrganizerOrAdmin: isOrganizerOrAdmin(),
     hasRole,
     loading,
   };

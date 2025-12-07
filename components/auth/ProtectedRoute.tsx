@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { roleSatisfies } from '@/lib/roles';
 import type { UserRole } from '@/types';
 
 interface ProtectedRouteProps {
@@ -27,9 +28,7 @@ export default function ProtectedRoute({
       }
 
       if (requiredRole && profile) {
-        const hasRole = Array.isArray(requiredRole)
-          ? requiredRole.includes(profile.role)
-          : profile.role === requiredRole;
+        const hasRole = roleSatisfies(requiredRole, profile.role);
 
         if (!hasRole) {
           router.push('/');
@@ -55,9 +54,7 @@ export default function ProtectedRoute({
   }
 
   if (requiredRole && profile) {
-    const hasRole = Array.isArray(requiredRole)
-      ? requiredRole.includes(profile.role)
-      : profile.role === requiredRole;
+    const hasRole = roleSatisfies(requiredRole, profile.role);
 
     if (!hasRole) {
       return null;

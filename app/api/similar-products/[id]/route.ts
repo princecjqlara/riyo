@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { roleSatisfies } from '@/lib/roles';
 
 export async function DELETE(
   request: NextRequest,
@@ -21,7 +22,7 @@ export async function DELETE(
       .eq('id', user.id)
       .single();
 
-    if (!profile || profile.role !== 'admin') {
+    if (!profile || !roleSatisfies('admin', profile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 
 export default function Navbar() {
   const { user, profile } = useAuth();
-  const { isAdmin, isStaffOrAdmin } = useRole();
+  const { isAdmin, isStaffOrAdmin, isOrganizer } = useRole();
   const router = useRouter();
 
   const handleSignOut = async () => {
@@ -40,6 +40,14 @@ export default function Navbar() {
                       className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
                     >
                       Admin
+                    </Link>
+                  )}
+                  {isOrganizer && (
+                    <Link
+                      href="/organizer"
+                      className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                    >
+                      Organizer
                     </Link>
                   )}
                   <Link

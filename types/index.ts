@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'staff';
+export type UserRole = 'organizer' | 'admin' | 'staff';
 
 export interface UserProfile {
   id: string;
@@ -7,6 +7,31 @@ export interface UserProfile {
   role: UserRole;
   created_at: string;
   updated_at: string;
+}
+
+export interface Store {
+  id: string;
+  name: string;
+  organizer_id: string;
+  created_at: string;
+}
+
+export interface StoreAdminInvite {
+  id: string;
+  store_id: string;
+  email: string;
+  status: 'pending' | 'sent' | 'accepted' | 'failed';
+  invite_token: string;
+  invited_by: string;
+  created_at: string;
+}
+
+export interface BrandingSettings {
+  id: string;
+  title: string;
+  subtitle: string;
+  updated_at?: string;
+  updated_by?: string;
 }
 
 export interface Item {

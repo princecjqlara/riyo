@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import type { BrandingSettings } from '@/types';
 
 interface WholesaleTier { min_qty: number; price: number; label: string; }
 interface Category { id: string; name: string; parent_id: string | null; children?: Category[]; }
@@ -51,6 +52,10 @@ export default function ShopPage() {
   const [addQty, setAddQty] = useState(1);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [fullscreenPhoto, setFullscreenPhoto] = useState<string | null>(null);
+  const [branding, setBranding] = useState<Pick<BrandingSettings, 'title' | 'subtitle'>>({
+    title: 'PriceScan',
+    subtitle: 'Wholesale Lookup',
+  });
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
 
   // Transfer
@@ -66,6 +71,7 @@ export default function ShopPage() {
     setSessionId(sid);
     fetchData();
     fetchCart(sid);
+    fetchBranding();
   }, []);
 
   useEffect(() => {
@@ -144,6 +150,21 @@ export default function ShopPage() {
     setCartItems(data.items || []);
     setCartTotal(data.total || 0);
     setCartDiscount(data.total_discount || 0);
+  };
+
+  const fetchBranding = async () => {
+    try {
+      const res = await fetch('/api/branding');
+      if (res.ok) {
+        const data = await res.json();
+        setBranding({
+          title: data.title || 'PriceScan',
+          subtitle: data.subtitle || 'Wholesale Lookup',
+        });
+      }
+    } catch (error) {
+      console.error('Branding load failed:', error);
+    }
   };
 
   const addToCart = async (productId: string, qty: number, size?: string | null) => {
@@ -300,8 +321,8 @@ export default function ShopPage() {
             <div className="p-6 sticky top-0 bg-white/90 backdrop-blur-xl z-30 border-b border-gray-100 shadow-sm">
               <div className="flex justify-between items-center mb-6">
                 <div>
-                  <h1 className="text-2xl font-black italic bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent">PriceScan</h1>
-                  <p className="text-xs text-gray-400 font-medium tracking-wider uppercase">Wholesale Lookup</p>
+                  <h1 className="text-2xl font-black italic bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent">{branding.title}</h1>
+                  <p className="text-xs text-gray-400 font-medium tracking-wider uppercase">{branding.subtitle}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <div onClick={() => setMode('cart')} className="relative p-3 bg-gray-50 border border-gray-200 rounded-2xl active:scale-95 transition-all cursor-pointer hover:bg-gray-100">

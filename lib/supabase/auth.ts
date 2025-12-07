@@ -1,4 +1,5 @@
 import { supabase } from './client';
+import { roleSatisfies } from '../roles';
 import type { UserProfile, UserRole } from '@/types';
 
 export async function getCurrentUser() {
@@ -27,11 +28,7 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
 export async function checkRole(requiredRole: UserRole | UserRole[]): Promise<boolean> {
   const profile = await getCurrentUserProfile();
   if (!profile) return false;
-  
-  if (Array.isArray(requiredRole)) {
-    return requiredRole.includes(profile.role);
-  }
-  return profile.role === requiredRole;
+  return roleSatisfies(requiredRole, profile.role);
 }
 
 export async function isAdmin(): Promise<boolean> {
@@ -40,5 +37,9 @@ export async function isAdmin(): Promise<boolean> {
 
 export async function isStaffOrAdmin(): Promise<boolean> {
   return checkRole(['admin', 'staff']);
+}
+
+export async function isOrganizer(): Promise<boolean> {
+  return checkRole('organizer');
 }
 
