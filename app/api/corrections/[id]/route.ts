@@ -7,7 +7,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -28,7 +28,7 @@ export async function PUT(
     const body = await request.json();
     const { correct_item_id, status } = body;
 
-    const updateData: any = {};
+    const updateData: Record<string, string> = {};
     if (correct_item_id) updateData.correct_item_id = correct_item_id;
     if (status) updateData.status = status;
 
@@ -50,4 +50,3 @@ export async function PUT(
     );
   }
 }
-
