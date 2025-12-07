@@ -13,7 +13,10 @@ export default function OrganizerDashboard() {
   const [storeForInvite, setStoreForInvite] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [renameStoreId, setRenameStoreId] = useState('');
+  const [renameStoreName, setRenameStoreName] = useState('');
 
   useEffect(() => {
     loadData();
@@ -33,6 +36,10 @@ export default function OrganizerDashboard() {
         setStores(data.stores || []);
         if (!storeForInvite && data.stores?.[0]) {
           setStoreForInvite(data.stores[0].id);
+        }
+        if (!renameStoreId && data.stores?.[0]) {
+          setRenameStoreId(data.stores[0].id);
+          setRenameStoreName(data.stores[0].name);
         }
       } else {
         setMessage('Failed to load stores');
@@ -112,11 +119,39 @@ export default function OrganizerDashboard() {
     }
   };
 
+  const handleRenameStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renameStoreId || !renameStoreName.trim()) {
+      setMessage('Select a store and enter a new name.');
+      return;
+    }
+    setRenaming(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/stores', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: renameStoreId, name: renameStoreName.trim() }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error || 'Failed to rename store');
+      }
+      const { store } = body;
+      setStores(stores.map((s) => (s.id === store.id ? store : s)));
+      setMessage('Store name updated.');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to rename store');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   if (loading) {
     return (
-      <ProtectedRoute requiredRole="organizer">
-        <div className="min-h-screen bg-gray-50">
-          <Navbar />
+    <ProtectedRoute requiredRole={['admin', 'organizer']}>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
           <main className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
@@ -129,7 +164,7 @@ export default function OrganizerDashboard() {
   }
 
   return (
-    <ProtectedRoute requiredRole="organizer">
+    <ProtectedRoute requiredRole={['admin', 'organizer']}>
       <div className="min-h-screen bg-gray-50">
         <Navbar />
         <main className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8 space-y-8">
@@ -166,6 +201,47 @@ export default function OrganizerDashboard() {
                   {submitting ? 'Creating...' : 'Create store'}
                 </button>
               </form>
+              <div className="mt-8 border-t border-gray-100 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Rename a Store</h3>
+                <form onSubmit={handleRenameStore} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Select store</label>
+                    <select
+                      value={renameStoreId}
+                      onChange={(e) => {
+                        setRenameStoreId(e.target.value);
+                        const match = stores.find((s) => s.id === e.target.value);
+                        if (match) setRenameStoreName(match.name);
+                      }}
+                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    >
+                      <option value="">Choose a store</option>
+                      {stores.map((store) => (
+                        <option key={store.id} value={store.id}>
+                          {store.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">New name</label>
+                    <input
+                      type="text"
+                      value={renameStoreName}
+                      onChange={(e) => setRenameStoreName(e.target.value)}
+                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      placeholder="Enter new store name"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={renaming}
+                    className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-white font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {renaming ? 'Renaming...' : 'Rename store'}
+                  </button>
+                </form>
+              </div>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">

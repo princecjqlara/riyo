@@ -62,6 +62,8 @@ export default function ShopPage() {
   const [transferCode, setTransferCode] = useState<string | null>(null);
   const [transferExpires, setTransferExpires] = useState<string | null>(null);
 
+  const cleanLabel = (text?: string | null) => (text || '').replace(/^\*+\s*/, '').replace(/\s*\*+$/, '').trim();
+
   const ensureSessionId = () => {
     if (sessionId) return sessionId;
     if (typeof window === 'undefined') return '';
@@ -274,13 +276,13 @@ export default function ShopPage() {
     ? products.filter(p => p.category_id === selectedCat)
     : products;
 
-  const getPriceDisplay = (product: Product, qty: number) => {
-    const basePrice = Number((product as Product).price ?? 0);
+  const getPriceDisplay = (product: Product, qty: number, sizePrice?: number | null) => {
+    const basePrice = Number(sizePrice ?? (product as Product).price ?? 0);
     const tiers = product.wholesale_tiers || [];
     const sorted = [...tiers].sort((a, b) => b.min_qty - a.min_qty);
     for (const tier of sorted) {
       const tierPrice = Number((tier as WholesaleTier).price ?? basePrice);
-      if (qty >= tier.min_qty) {
+      if (qty >= tier.min_qty && tierPrice < basePrice) {
         return { price: tierPrice, isWholesale: true, label: tier.label, discount: basePrice - tierPrice };
       }
     }
@@ -294,7 +296,7 @@ export default function ShopPage() {
       : null;
 
     if (sizePrice !== undefined && sizePrice !== null) {
-      return Number(sizePrice) || 0;
+      return getPriceDisplay(selectedProduct, addQty, sizePrice).price || 0;
     }
 
     const fallbackPrice = getPriceDisplay(selectedProduct, addQty).price ?? selectedProduct.price ?? 0;
@@ -450,8 +452,8 @@ export default function ShopPage() {
                       </div>
                     </div>
                     <div className="px-1">
-                      <h3 className="text-gray-900 font-bold truncate text-sm mb-1">{p.name}</h3>
-                      <p className="text-gray-400 text-xs truncate mb-2">{p.brand || 'Generic'}</p>
+                      <h3 className="text-gray-900 font-bold truncate text-sm mb-1">{cleanLabel(p.name)}</h3>
+                      <p className="text-gray-400 text-xs truncate mb-2">{cleanLabel(p.brand) || 'Generic'}</p>
                       <div className="flex justify-between items-end">
                         <span className="text-orange-500 font-black text-lg">₱{p.price.toFixed(0)}</span>
                         {p.quantity < 5 && <span className="text-[10px] text-red-500 font-medium bg-red-50 px-2 py-0.5 rounded-full">{p.quantity} left</span>}
@@ -484,7 +486,7 @@ export default function ShopPage() {
                   <div key={item.id} className="flex gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm items-center">
                     <img src={item.product.image_url || ''} className="w-20 h-20 rounded-xl object-cover bg-gray-100 mix-blend-multiply" />
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-gray-900 truncate">{item.product.name}</h4>
+                      <h4 className="font-bold text-gray-900 truncate">{cleanLabel(item.product.name)}</h4>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className="text-sm text-gray-500">₱{item.unit_price}</span>
                         {item.size && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200 uppercase font-bold">{item.size}</span>}
@@ -564,14 +566,14 @@ export default function ShopPage() {
             <div className="p-6 flex-1 flex flex-col">
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-orange-500 text-xs font-bold tracking-wider uppercase">{selectedProduct.brand || 'No Brand'}</span>
+                  <span className="text-orange-500 text-xs font-bold tracking-wider uppercase">{cleanLabel(selectedProduct.brand) || 'No Brand'}</span>
                   {selectedProduct.quantity > 0 ? (
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">✓ In Stock</span>
                   ) : (
                     <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">Out of Stock</span>
                   )}
                 </div>
-                <h2 className="text-3xl font-black leading-tight mb-3 text-gray-900">{selectedProduct.name}</h2>
+                <h2 className="text-3xl font-black leading-tight mb-3 text-gray-900">{cleanLabel(selectedProduct.name)}</h2>
 
                 {/* Quick Info Bar */}
                 <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -679,9 +681,9 @@ export default function ShopPage() {
                 >
                   {selectedProduct.sizes?.length && !selectedSize ? 'SELECT A SIZE' : `ADD TO CART ${selectedSize ? `(${selectedSize})` : ''}`}
                 </button>
-                {!selectedSize && getPriceDisplay(selectedProduct, addQty).isWholesale && (
+                {getPriceDisplay(selectedProduct, addQty, selectedSize ? selectedProduct.sizes?.find(s => s.size === selectedSize)?.price : undefined).isWholesale && (
                   <p className="text-center text-green-600 text-xs mt-3 font-bold animate-pulse">
-                    🎉 Bulk Savings! Saved ₱{(getPriceDisplay(selectedProduct, addQty).discount * addQty).toFixed(2)}
+                    🎉 Bulk Savings! Saved ₱{(getPriceDisplay(selectedProduct, addQty, selectedSize ? selectedProduct.sizes?.find(s => s.size === selectedSize)?.price : undefined).discount * addQty).toFixed(2)}
                   </p>
                 )}
               </div>

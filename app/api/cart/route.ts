@@ -189,7 +189,11 @@ export async function POST(request: NextRequest) {
             query = query.is('size', null);
         }
 
-        const { data: existingItem } = await query.single();
+        const { data: existingItem, error: existingError } = await query.maybeSingle();
+        if (existingError && existingError.code !== 'PGRST116') {
+            console.error('Cart lookup error:', existingError);
+            return NextResponse.json({ error: 'Failed to add item' }, { status: 500 });
+        }
 
         const newQuantity = existingItem ? existingItem.quantity + quantity : quantity;
         const pricing = getBestPrice(product.price, product.wholesale_tiers || [], newQuantity, sizePrice);
